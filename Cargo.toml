@@ -1,0 +1,23 @@
+[package]
+name = "verde-lsp"
+version = "0.1.0"
+description = "VBA Language Server for Verde"
+authors = ["verde-vba"]
+license = "MIT"
+repository = "https://github.com/verde-vba/verde-lsp"
+edition = "2021"
+
+[dependencies]
+tower-lsp = "0.20"
+logos = "0.15"
+la-arena = "0.3"
+smol_str = { version = "0.3", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dashmap = "6"
+tokio = { version = "1", features = ["full"] }
+log = "0.4"
+env_logger = "0.11"
+
+[dev-dependencies]
+expect-test = "1"
