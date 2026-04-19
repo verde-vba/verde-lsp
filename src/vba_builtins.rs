@@ -1,0 +1,34 @@
+pub const KEYWORDS: &[&str] = &[
+    "And", "As", "ByRef", "ByVal", "Call", "Case", "Const", "Declare",
+    "Dim", "Do", "Each", "Else", "ElseIf", "End", "Enum", "Erase",
+    "Error", "Event", "Exit", "For", "Friend", "Function", "Get",
+    "GoSub", "GoTo", "If", "Implements", "In", "Is", "Let", "Lib",
+    "Like", "Loop", "Me", "Mod", "New", "Next", "Not", "Nothing",
+    "Null", "On", "Option", "Optional", "Or", "ParamArray", "Preserve",
+    "Private", "Property", "Public", "RaiseEvent", "ReDim", "Rem",
+    "Resume", "Return", "Select", "Set", "Static", "Step", "Stop",
+    "Sub", "Then", "To", "Type", "TypeOf", "Until", "Wend", "While",
+    "With", "WithEvents", "Xor",
+];
+
+pub const BUILTIN_FUNCTIONS: &[&str] = &[
+    "Abs", "Array", "Asc", "CBool", "CByte", "CCur", "CDate", "CDbl",
+    "CDec", "Chr", "CInt", "CLng", "CLngLng", "CLngPtr", "CSng", "CStr",
+    "CVar", "DateAdd", "DateDiff", "DatePart", "DateSerial", "DateValue",
+    "Day", "Dir", "Environ", "EOF", "Format", "FreeFile", "Hex",
+    "Hour", "IIf", "InStr", "InStrRev", "InputBox", "Int", "IsArray",
+    "IsDate", "IsEmpty", "IsError", "IsMissing", "IsNull", "IsNumeric",
+    "IsObject", "Join", "LBound", "LCase", "Left", "Len", "Log",
+    "LTrim", "Mid", "Minute", "Month", "MonthName", "MsgBox", "Now",
+    "Oct", "Replace", "RGB", "Right", "Rnd", "Round", "RTrim",
+    "Second", "Sgn", "Shell", "Space", "Split", "Sqr", "Str",
+    "StrComp", "StrConv", "String", "Timer", "TimeSerial", "TimeValue",
+    "Trim", "TypeName", "UBound", "UCase", "Val", "VarType",
+    "Weekday", "WeekdayName", "Year",
+];
+
+pub const BUILTIN_TYPES: &[&str] = &[
+    "Boolean", "Byte", "Integer", "Long", "LongLong", "LongPtr",
+    "Single", "Double", "Currency", "Date", "String", "Variant",
+    "Object",
+];
