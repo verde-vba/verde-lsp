@@ -77,35 +77,28 @@ pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<Compl
         });
     }
 
-    // Workbook sheet names from workbook-context.json
-    for sheet in host.workbook_sheets() {
-        items.push(CompletionItem {
-            label: sheet,
-            kind: Some(CompletionItemKind::MODULE),
-            detail: Some("Worksheet".to_string()),
-            ..Default::default()
-        });
-    }
-
-    for table in host.workbook_tables() {
-        items.push(CompletionItem {
-            label: table,
-            kind: Some(CompletionItemKind::STRUCT),
-            detail: Some("Table".to_string()),
-            ..Default::default()
-        });
-    }
-
-    for named_range in host.workbook_named_ranges() {
-        items.push(CompletionItem {
-            label: named_range,
-            kind: Some(CompletionItemKind::CONSTANT),
-            detail: Some("Named Range".to_string()),
-            ..Default::default()
-        });
-    }
+    // Workbook names from workbook-context.json
+    push_named_items(&mut items, host.workbook_sheets(), CompletionItemKind::MODULE, "Worksheet");
+    push_named_items(&mut items, host.workbook_tables(), CompletionItemKind::STRUCT, "Table");
+    push_named_items(&mut items, host.workbook_named_ranges(), CompletionItemKind::CONSTANT, "Named Range");
 
     items
+}
+
+fn push_named_items(
+    items: &mut Vec<CompletionItem>,
+    names: Vec<String>,
+    kind: CompletionItemKind,
+    detail: &str,
+) {
+    for name in names {
+        items.push(CompletionItem {
+            label: name,
+            kind: Some(kind),
+            detail: Some(detail.to_string()),
+            ..Default::default()
+        });
+    }
 }
 
 fn proc_at_position(symbols: &SymbolTable, source: &str, position: Position) -> Option<smol_str::SmolStr> {
