@@ -17,6 +17,22 @@ fn do_hover(source: &str, position: Position) -> Option<String> {
 }
 
 #[test]
+fn hover_on_local_variable_shows_type() {
+    // "Sub Foo()\n    Dim x As String\nEnd Sub\n"
+    //  line 1:  "    Dim x As String"
+    //                    ^ col 8
+    let source = "Sub Foo()\n    Dim x As String\nEnd Sub\n";
+    let position = Position::new(1, 8); // on 'x'
+    let content = do_hover(source, position)
+        .expect("expected hover result for local variable");
+    assert!(
+        content.contains("x") && content.contains("String"),
+        "expected hover to show 'x' with type 'String', got: {:?}",
+        content
+    );
+}
+
+#[test]
 fn hover_on_sub_name_shows_parameter_list() {
     // "Sub Foo(x As Long, y As String)"
     //  0123456789...
