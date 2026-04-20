@@ -1,8 +1,8 @@
 # verde-lsp バックログ
 
 > 最終更新: 2026-04-20  
-> 現在ブランチ: main (unpushed: 33d29cf / 7ccfb89 / 9ee51a7 / 572cbb7 / 12b1307 / a77b011 / d76bb0b / 8ed4d9a / a9247df)  
-> テスト基準: 38+ green, cargo clippy -D warnings 0 件
+> 現在ブランチ: main (最新: d999975)  
+> テスト基準: 49 green, cargo clippy -D warnings 0 件
 
 ---
 
@@ -75,6 +75,14 @@ PBI-04 (Call site definition) は PBI-01 完了後に実施すると実装品質
 | **調査メモ** | `src/parser/parse.rs` の `classify_and_parse_statement` ルータに While/Do/ReDim のエントリを追加する必要あり。`lexer::Token` に対応キーワードがあるか要確認 |
 
 ---
+
+## 完了済み (Sprint N+2)
+
+| コミット | 内容 |
+|----------|------|
+| `563024d` | refactor: LocalDeclarationNode に per-name 型情報を追加 (Tidy First) |
+| `11ac2ba` | feat: PBI-01 — ローカル変数を SymbolTable に登録 (hover/completion 対応) |
+| `d999975` | test: PBI-01 受入基準テスト (hover 型名表示・completion 候補露出) |
 
 ## 完了済み (Sprint N+1)
 
