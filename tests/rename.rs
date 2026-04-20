@@ -83,3 +83,30 @@ fn cross_file_rename_includes_other_file_occurrences() {
         changes.keys().collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn rename_from_call_site_in_other_file() {
+    // cursor is in module_b on the call site "Foo" — Foo is defined in module_a
+    let uri_a: Url = "file:///module_a.bas".parse().unwrap();
+    let src_a = "Public Sub Foo()\nEnd Sub\n";
+    let uri_b: Url = "file:///module_b.bas".parse().unwrap();
+    // "Foo" in module_b: line 1 col 4
+    let src_b = "Sub Main()\n    Foo\nEnd Sub\n";
+
+    let host = AnalysisHost::new();
+    host.update(uri_a.clone(), src_a.to_string(), parser::parse(src_a));
+    host.update(uri_b.clone(), src_b.to_string(), parser::parse(src_b));
+
+    // cursor on Foo call site in module_b
+    let edit = rename::rename(&host, &uri_b, Position::new(1, 4), "Bar");
+    assert!(
+        edit.is_some(),
+        "expected rename from call site in module_b to succeed, got None"
+    );
+    let changes = edit.unwrap().changes.unwrap();
+    assert!(
+        changes.contains_key(&uri_a),
+        "expected module_a to be included in rename changes, got: {:?}",
+        changes.keys().collect::<Vec<_>>()
+    );
+}
