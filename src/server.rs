@@ -57,6 +57,7 @@ impl LanguageServer for VbaLanguageServer {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 definition_provider: Some(OneOf::Left(true)),
                 rename_provider: Some(OneOf::Left(true)),
+                references_provider: Some(OneOf::Left(true)),
                 ..Default::default()
             },
             ..Default::default()
@@ -150,6 +151,16 @@ impl LanguageServer for VbaLanguageServer {
             uri,
             position,
         ))
+    }
+
+    async fn references(
+        &self,
+        params: ReferenceParams,
+    ) -> Result<Option<Vec<Location>>> {
+        let uri = &params.text_document_position.text_document.uri;
+        let position = params.text_document_position.position;
+        let locs = crate::references::find_references(&self.analysis, uri, position);
+        Ok(if locs.is_empty() { None } else { Some(locs) })
     }
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
