@@ -259,7 +259,7 @@ pub enum Token {
     Newline,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SpannedToken {
     pub token: Token,
     pub span: std::ops::Range<usize>,

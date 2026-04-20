@@ -1,6 +1,8 @@
 use la_arena::{Arena, Idx};
 use smol_str::SmolStr;
 
+use super::lexer::SpannedToken;
+
 pub type NodeId = Idx<AstNode>;
 
 #[derive(Debug, Clone)]
@@ -126,19 +128,37 @@ pub struct EnumDefNode {
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum StatementNode {
-    Assignment {
-        target: SmolStr,
-        span: TextRange,
-    },
-    Call {
-        name: SmolStr,
-        span: TextRange,
-    },
-    Other {
-        span: TextRange,
-    },
+    LocalDeclaration(LocalDeclarationNode),
+    Expression(ExpressionStatementNode),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeclKind {
+    Dim,
+    Static,
+    Const,
+    ReDim,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalDeclarationNode {
+    pub kind: DeclKind,
+    /// Names of locals introduced by this declaration. For `Dim a, b As String`
+    /// this holds `[a, b]`. Types are intentionally not captured at this layer
+    /// — diagnostics only need to know which identifiers are declared.
+    pub names: Vec<SmolStr>,
+    pub span: TextRange,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExpressionStatementNode {
+    /// Raw tokens within the statement (excluding the terminating
+    /// Newline/Colon). Preserves positional info so future AST walks can
+    /// resolve identifier references without re-lexing the body.
+    pub tokens: Vec<SpannedToken>,
+    pub span: TextRange,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

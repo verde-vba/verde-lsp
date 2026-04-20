@@ -162,35 +162,78 @@ impl<'a> Parser<'a> {
         // End token's position.
         let mut body_start: Option<usize> = None;
 
+        // Advance past the signature line so the body loop does not re-see
+        // signature tokens. We look for either the signature-terminating
+        // Newline or the `end_token` itself (single-line procedures are not
+        // really a thing in VBA, but be defensive).
         while self.pos < self.tokens.len() {
             let tok = &self.tokens[self.pos];
             if tok.token == end_token {
-                let body_end = tok.span.start;
-                let body_start = body_start.unwrap_or(body_end);
-                let end = tok.span.end;
-                self.pos += 1;
-
-                let node = AstNode::Procedure(ProcedureNode {
-                    name,
-                    kind,
-                    visibility,
-                    params,
-                    return_type: None,
-                    body: Vec::new(),
-                    span: TextRange::new(start, end),
-                    body_range: TextRange::new(body_start, body_end),
-                });
-                let id = self.ast.nodes.alloc(node);
-                self.ast.root.push(id);
-                return;
+                break;
             }
-            if body_start.is_none() && tok.token == Token::Newline {
-                // Body begins immediately after the signature-terminating
-                // newline. Subsequent newlines inside the body keep
-                // `body_start` fixed at this first position.
+            if tok.token == Token::Newline {
                 body_start = Some(tok.span.end);
+                self.pos += 1;
+                break;
             }
             self.pos += 1;
+        }
+
+        // Parse body statements until the matching End token (or EOF).
+        let mut body: Vec<NodeId> = Vec::new();
+        loop {
+            // Skip statement separators and comments between statements.
+            while matches!(
+                self.peek(),
+                Some(t) if matches!(
+                    t.token,
+                    Token::Newline | Token::Colon | Token::LineContinuation | Token::Comment
+                )
+            ) {
+                self.pos += 1;
+            }
+
+            match self.peek() {
+                None => break,
+                Some(t) if t.token == end_token => {
+                    let body_end = t.span.start;
+                    let body_start = body_start.unwrap_or(body_end);
+                    let end = t.span.end;
+                    self.pos += 1;
+
+                    let node = AstNode::Procedure(ProcedureNode {
+                        name,
+                        kind,
+                        visibility,
+                        params,
+                        return_type: None,
+                        body,
+                        span: TextRange::new(start, end),
+                        body_range: TextRange::new(body_start, body_end),
+                    });
+                    let id = self.ast.nodes.alloc(node);
+                    self.ast.root.push(id);
+                    return;
+                }
+                Some(t) => {
+                    let decl_kind = match t.token {
+                        Token::Dim => Some(DeclKind::Dim),
+                        Token::Static => Some(DeclKind::Static),
+                        Token::Const => Some(DeclKind::Const),
+                        Token::ReDim => Some(DeclKind::ReDim),
+                        _ => None,
+                    };
+                    let stmt_node = if let Some(kind) = decl_kind {
+                        let decl = self.parse_local_declaration(kind);
+                        AstNode::Statement(StatementNode::LocalDeclaration(decl))
+                    } else {
+                        let expr = self.parse_expression_statement();
+                        AstNode::Statement(StatementNode::Expression(expr))
+                    };
+                    let id = self.ast.nodes.alloc(stmt_node);
+                    body.push(id);
+                }
+            }
         }
 
         let end = self.tokens.last().map(|t| t.span.end).unwrap_or(start);
@@ -367,6 +410,119 @@ impl<'a> Parser<'a> {
             span: TextRange::new(start_offset, end_offset),
         });
         Some(self.ast.nodes.alloc(node))
+    }
+
+    /// Parse a local declaration starting at the Dim/Static/Const/ReDim keyword.
+    /// Collects declared identifier names, honoring `As Type` clauses and
+    /// commas, stopping at a statement terminator (Newline/Colon) or EOF.
+    /// Leaves `pos` on the terminator (or EOF); the caller skips it.
+    fn parse_local_declaration(&mut self, kind: DeclKind) -> LocalDeclarationNode {
+        let start_offset = self
+            .tokens
+            .get(self.pos)
+            .map(|t| t.span.start)
+            .unwrap_or(0);
+        self.pos += 1; // consume the kind keyword (Dim/Static/Const/ReDim)
+
+        // `ReDim` optionally has `Preserve` right after the keyword.
+        if matches!(self.peek(), Some(t) if t.token == Token::Preserve) {
+            self.pos += 1;
+        }
+
+        let mut names: Vec<SmolStr> = Vec::new();
+        let mut end_offset = start_offset;
+        let mut paren_depth: i32 = 0;
+        let mut expect_name = true;
+
+        while let Some(t) = self.peek() {
+            match t.token {
+                Token::Newline | Token::Colon if paren_depth == 0 => break,
+                Token::LineContinuation => {
+                    end_offset = t.span.end;
+                    self.pos += 1;
+                }
+                Token::Identifier if expect_name && paren_depth == 0 => {
+                    names.push(t.text.clone());
+                    end_offset = t.span.end;
+                    expect_name = false;
+                    self.pos += 1;
+                }
+                Token::Comma if paren_depth == 0 => {
+                    end_offset = t.span.end;
+                    expect_name = true;
+                    self.pos += 1;
+                }
+                Token::LParen => {
+                    paren_depth += 1;
+                    end_offset = t.span.end;
+                    self.pos += 1;
+                }
+                Token::RParen => {
+                    paren_depth = (paren_depth - 1).max(0);
+                    end_offset = t.span.end;
+                    self.pos += 1;
+                }
+                _ => {
+                    // `As Type`, `= expr`, array bounds, etc. Anything that
+                    // isn't another top-level name belongs to the current
+                    // slot — keep scanning until we see a comma, newline, or
+                    // colon.
+                    end_offset = t.span.end;
+                    expect_name = false;
+                    self.pos += 1;
+                }
+            }
+        }
+
+        LocalDeclarationNode {
+            kind,
+            names,
+            span: TextRange::new(start_offset, end_offset),
+        }
+    }
+
+    /// Collect tokens for one statement up to the next Newline/Colon (outside
+    /// parentheses). Line continuations are consumed as part of the current
+    /// statement and are included in the captured token stream so downstream
+    /// consumers retain positional fidelity. Leaves `pos` on the terminator
+    /// (or EOF); the caller skips it.
+    fn parse_expression_statement(&mut self) -> ExpressionStatementNode {
+        let start_offset = self
+            .tokens
+            .get(self.pos)
+            .map(|t| t.span.start)
+            .unwrap_or(0);
+        let mut end_offset = start_offset;
+        let mut tokens: Vec<lexer::SpannedToken> = Vec::new();
+        let mut paren_depth: i32 = 0;
+
+        while let Some(t) = self.peek() {
+            match t.token {
+                Token::Newline | Token::Colon if paren_depth == 0 => break,
+                Token::LParen => {
+                    paren_depth += 1;
+                    end_offset = t.span.end;
+                    tokens.push(t.clone());
+                    self.pos += 1;
+                }
+                Token::RParen => {
+                    paren_depth = (paren_depth - 1).max(0);
+                    end_offset = t.span.end;
+                    tokens.push(t.clone());
+                    self.pos += 1;
+                }
+                _ => {
+                    end_offset = t.span.end;
+                    tokens.push(t.clone());
+                    self.pos += 1;
+                }
+            }
+        }
+
+        ExpressionStatementNode {
+            tokens,
+            span: TextRange::new(start_offset, end_offset),
+        }
     }
 
     fn parse_property(&mut self, visibility: Visibility) {
@@ -613,7 +769,7 @@ mod tests {
         );
     }
 
-    fn statement<'a>(ast: &'a Ast, id: NodeId) -> &'a StatementNode {
+    fn statement(ast: &Ast, id: NodeId) -> &StatementNode {
         match &ast.nodes[id] {
             AstNode::Statement(s) => s,
             other => panic!("expected Statement node, got {:?}", other),
