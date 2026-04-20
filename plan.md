@@ -81,15 +81,7 @@
 
 ## プロダクトバックログ
 
-### PBI-02 — 手続きパラメータを hover シグネチャに表示する (Small)
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | `SymbolDetail::Procedure.params` は parser が収集済みだが `src/analysis/symbols.rs:80` で常に空ベクタになっている。これを実値で埋め、hover が `Sub Foo(x As Long, y As String)` を表示できるようにする。 |
-| **受入基準** | (1) 引数を持つ手続きへの hover が引数名+型を含むシグネチャを返す。(2) cargo test 62+ green, clippy 0 |
-| **見積サイズ** | S |
-| **依存** | なし |
-| **調査メモ** | `src/parser/ast.rs` の `ProcedureNode.params: Vec<NodeId>` → `ParameterNode { name, type_name, passing, ... }` が利用可能。`symbols.rs` の `populate_procedure_symbol` 相当箇所に 5-10 行追加で済む見込み |
+*アクティブな Ready PBI なし。次の大型 PBI (PBI-09) はバックログリファインメントが必要。*
 
 ---
 
