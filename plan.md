@@ -269,6 +269,51 @@ PBI-43/44 は **L サイズ**かつ AST 変更を伴うため、Sprint N+45 は 
 
 ---
 
+## PBI-43 Backlog Refinement (Sprint N+45 Planning 材料)
+
+### 概要
+
+UDT (`Type` ブロック) のメンバーを `foo.bar` の形式で解決する。補完・hover・goto-def の 3 機能が対象。
+
+### L 見積の根拠
+
+| レイヤー | 変更内容 | コスト |
+|---|---|---|
+| Parser / AST | `Type ... End Type` ブロックを `TypeBlockNode` として認識、メンバーを `la-arena` に格納 | M |
+| SymbolTable | `SymbolDetail::UdtMember { type_name: SmolStr }` を追加、変数の型を `SmolStr` で保持 | S |
+| Dot-access 解析 | `foo.bar` の `foo` 型を lookup → UDT 定義を引いて `.bar` の候補を生成 | M |
+| テスト | parser / symbol / completion / hover の各層で TDD red-green | S |
+
+合計: L (4-6 Sprint 日相当)。既存 `Enum` ブロック実装 (`src/parser.rs` + `SymbolDetail::EnumMember`) が参考パターン。
+
+### TDD 可能性
+
+**高い。** 各レイヤーを独立してテスト可能:
+1. `parser` 単体: `Type Foo\n  x As Long\nEnd Type` → `TypeBlockNode { members: [("x", "Long")] }`
+2. `symbol_table` 単体: UDT 定義がシンボルテーブルに登録されること
+3. `completion` 統合: `Dim f As Foo\nf.` でメンバー `x` が補完候補に現れること
+
+### `Type` ブロック parser 変更の影響範囲
+
+- `src/parser.rs`: `parse_type_block()` 関数追加。`parse_module_level_statement()` のマッチアームに `Token::Type` を追加。
+- `src/ast.rs`: `ModuleLevelStatement::TypeBlock(TypeBlockNode)` バリアント追加。
+- `src/analysis.rs`: `collect_symbols()` に `TypeBlock` アームを追加し UDT 定義を登録。
+- `src/completion.rs`: dot-access 検出ロジック追加 (`foo.` のプレフィックスで `foo` 型を解決)。
+- **既存テストへの影響**: `Type` キーワードをパースできない現状では、`Type` ブロックを含むファイルが `parse_error` 診断を出す可能性。実際の .bas ファイルに `Type` ブロックが含まれているか確認が必要。
+
+### Planning Sprint 必要性の判断
+
+**直接実装を推奨 (Planning Sprint 不要)**。理由:
+- `Enum` ブロック (PBI-26/27/28/29) の実装パターンが確立しており、`Type` ブロックは同様のアプローチで実装可能。
+- dot-access 解析は新規だが、スコープが明確 (UDT のみ、Excel Object Model の dot 解析とは別経路)。
+- TDD で段階的に進められるため設計の不確実性が低い。
+
+**ただし Sprint 分割を推奨**:
+- Sprint N+45: Parser + SymbolTable 層 (AST 変更 + UDT 定義登録)
+- Sprint N+46: Dot-access 解析 + completion/hover/goto-def
+
+---
+
 ## Follow-ups (優先度低)
 
 - cargo test 並列化チューニング: >60s 警告散発対策として `-- --test-threads=4` など設定を検討。CI では影響なし。
