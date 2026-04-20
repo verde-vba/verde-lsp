@@ -139,3 +139,22 @@ fn hover_parameter_in_second_proc_shows_its_type() {
         content
     );
 }
+
+// ── Me. hover (PBI-44) ────────────────────────────────────────────────────────
+
+/// Hover on the member part of `Me.Method` should show the method signature.
+#[test]
+fn hover_me_dot_member_shows_signature() {
+    // line 0: Sub DoWork()
+    // line 1: End Sub
+    // line 2: Sub Test()
+    // line 3:     Me.DoWork   <- cursor on 'D' of DoWork at col 7
+    // line 4: End Sub
+    let source = "Sub DoWork()\nEnd Sub\nSub Test()\n    Me.DoWork\nEnd Sub\n";
+    let position = Position::new(3, 7); // on 'D' of DoWork
+    let content = do_hover(source, position).expect("expected hover for Me.DoWork");
+    assert!(
+        content.contains("DoWork"),
+        "expected hover to show 'DoWork', got: {content:?}"
+    );
+}

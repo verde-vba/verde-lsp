@@ -1512,4 +1512,41 @@ mod tests {
         assert!(matches!(var.visibility, Visibility::Private));
         assert!(!var.is_const);
     }
+
+    // ── Class module (.cls) header handling (PBI-44) ───────────────────────
+
+    #[test]
+    fn cls_header_is_skipped_and_sub_is_parsed() {
+        // Realistic .cls file: VERSION/BEGIN/END header followed by Attribute lines,
+        // then actual VBA code. The parser must skip the header and parse the Sub.
+        let source = "VERSION 1.0 CLASS\nBEGIN\n  MultiUse = -1\nEND\nAttribute VB_Name = \"MyClass\"\nAttribute VB_GlobalNameSpace = False\nSub DoWork()\nEnd Sub\n";
+        let result = parse(source);
+        let proc = result.ast.nodes.iter().find_map(|(_, n)| match n {
+            AstNode::Procedure(p) => Some(p),
+            _ => None,
+        });
+        assert!(
+            proc.is_some(),
+            "expected Sub DoWork to be parsed despite .cls header"
+        );
+        assert_eq!(proc.unwrap().name.as_str(), "DoWork");
+    }
+
+    #[test]
+    fn cls_header_does_not_prevent_variable_parsing() {
+        let source = "VERSION 1.0 CLASS\nBEGIN\n  MultiUse = -1\nEND\nAttribute VB_Name = \"MyClass\"\nPrivate m_count As Long\nSub Init()\nEnd Sub\n";
+        let result = parse(source);
+        let var = result.ast.root.iter().find_map(|&id| {
+            if let AstNode::Variable(v) = &result.ast.nodes[id] {
+                Some(v)
+            } else {
+                None
+            }
+        });
+        assert!(
+            var.is_some(),
+            "expected Private m_count to be parsed despite .cls header"
+        );
+        assert_eq!(var.unwrap().name.as_str(), "m_count");
+    }
 }

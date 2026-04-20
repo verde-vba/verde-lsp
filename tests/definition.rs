@@ -192,3 +192,28 @@ fn goto_def_parameter_in_second_proc_jumps_to_its_own_param() {
         def.character
     );
 }
+
+// ── Me. goto-def (PBI-44) ─────────────────────────────────────────────────────
+
+/// Goto-def on the member part of `Me.Method` jumps to the method definition.
+#[test]
+fn goto_def_me_dot_member_jumps_to_definition() {
+    // line 0: Sub DoWork()    <- definition at col 4
+    // line 1: End Sub
+    // line 2: Sub Test()
+    // line 3:     Me.DoWork   <- cursor on 'D' of DoWork at col 7
+    // line 4: End Sub
+    let source = "Sub DoWork()\nEnd Sub\nSub Test()\n    Me.DoWork\nEnd Sub\n";
+    let usage_pos = Position::new(3, 7); // on 'D' of DoWork
+    let def = do_goto(source, usage_pos).expect("expected goto-def for Me.DoWork");
+    assert_eq!(
+        def.line, 0,
+        "expected definition on line 0 (Sub DoWork), got {}",
+        def.line
+    );
+    assert_eq!(
+        def.character, 4,
+        "expected col 4 ('D' of DoWork), got {}",
+        def.character
+    );
+}

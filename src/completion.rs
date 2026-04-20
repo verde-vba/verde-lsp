@@ -112,7 +112,7 @@ pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<Compl
 }
 
 /// Returns `Some(items)` when cursor is in a dot-access context (`var.`),
-/// in which case only UDT members of the variable's type are offered.
+/// in which case only contextually relevant members are offered.
 /// Returns `None` when not in dot-access context (caller uses normal completion).
 fn complete_dot_access(
     symbols: &SymbolTable,
@@ -121,6 +121,32 @@ fn complete_dot_access(
 ) -> Option<Vec<CompletionItem>> {
     let offset = position_to_offset(source, position)?;
     let (var_name, _) = parse_dot_access_at(source, offset)?;
+
+    // `Me.` offers the class module's own procedures and module-level variables.
+    if var_name.eq_ignore_ascii_case("Me") {
+        let items: Vec<CompletionItem> = symbols
+            .symbols
+            .iter()
+            .filter(|s| {
+                s.proc_scope.is_none()
+                    && matches!(
+                        s.kind,
+                        SymbolKind::Procedure
+                            | SymbolKind::Function
+                            | SymbolKind::Property
+                            | SymbolKind::Variable
+                            | SymbolKind::Constant
+                    )
+            })
+            .map(|s| CompletionItem {
+                label: s.name.to_string(),
+                kind: Some(symbol_kind_to_completion_kind(&s.kind)),
+                detail: s.type_name.as_ref().map(|t| t.to_string()),
+                ..Default::default()
+            })
+            .collect();
+        return Some(items);
+    }
 
     // Prefer proc-scoped variable over module-level when cursor is inside a proc.
     let cursor_proc = symbols

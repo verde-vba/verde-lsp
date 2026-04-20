@@ -274,3 +274,64 @@ fn completion_includes_workbook_named_ranges() {
         "expected 'MyRange' from workbook named_ranges in completions, got: {items:?}"
     );
 }
+
+// ── Class module Me. completion (PBI-44) ─────────────────────────────────────
+
+/// `Me.` should offer the class module's own procedures and module-level variables.
+#[test]
+fn me_dot_completion_returns_module_members() {
+    // line 0: Sub DoWork()
+    // line 1: End Sub
+    // line 2: Private m_count As Long
+    // line 3: Sub Test()
+    // line 4:     Me.          <- cursor col 7 (after dot)
+    // line 5: End Sub
+    let source = "Sub DoWork()\nEnd Sub\nPrivate m_count As Long\nSub Test()\n    Me.\nEnd Sub\n";
+    let items = do_complete_at(source, 4, 7);
+    let labels: Vec<&str> = items.iter().map(|(l, _, _)| l.as_str()).collect();
+    assert!(
+        labels.contains(&"DoWork"),
+        "expected 'DoWork' in Me. completion, got: {labels:?}"
+    );
+    assert!(
+        labels.contains(&"m_count"),
+        "expected 'm_count' in Me. completion, got: {labels:?}"
+    );
+    assert!(
+        !labels.contains(&"Dim"),
+        "keyword 'Dim' must not appear in Me. dot-access completion, got: {labels:?}"
+    );
+}
+
+/// `Me.` completion must not offer proc-scoped local variables.
+#[test]
+fn me_dot_completion_excludes_local_variables() {
+    // line 0: Sub Test()
+    // line 1:     Dim local As Long
+    // line 2:     Me.          <- cursor col 7
+    // line 3: End Sub
+    let source = "Sub Test()\n    Dim local As Long\n    Me.\nEnd Sub\n";
+    let items = do_complete_at(source, 2, 7);
+    let labels: Vec<&str> = items.iter().map(|(l, _, _)| l.as_str()).collect();
+    assert!(
+        !labels.contains(&"local"),
+        "proc-local 'local' must not appear in Me. dot-access, got: {labels:?}"
+    );
+}
+
+/// `Me.partial` partial input should still resolve (cursor mid-word after dot).
+#[test]
+fn me_dot_completion_with_partial_member() {
+    // line 0: Sub GetValue() As Long
+    // line 1: End Sub
+    // line 2: Sub Test()
+    // line 3:     Me.Get       <- cursor col 10 (after "Get")
+    // line 4: End Sub
+    let source = "Sub GetValue()\nEnd Sub\nSub Test()\n    Me.Get\nEnd Sub\n";
+    let items = do_complete_at(source, 3, 10);
+    let labels: Vec<&str> = items.iter().map(|(l, _, _)| l.as_str()).collect();
+    assert!(
+        labels.contains(&"GetValue"),
+        "expected 'GetValue' in Me.Get partial completion, got: {labels:?}"
+    );
+}
