@@ -58,9 +58,8 @@ fn completion_local_var_not_visible_in_other_proc() {
 
 #[test]
 fn completion_module_var_visible_everywhere() {
-    // Module-level var (Public, no Dim) must appear inside Sub A.
-    // Note: bare module-level `Dim` is a parser limitation; use `Public` form.
-    let source = "Public m As String\nSub A()\n    \nEnd Sub\n";
+    // Module-level Dim var must appear as a completion candidate inside Sub A.
+    let source = "Dim m As String\nSub A()\n    \nEnd Sub\n";
     let items = do_complete_at(source, 2, 4);
     let found = items.iter().find(|(label, _, _)| label == "m");
     assert!(found.is_some(), "expected module var 'm' visible inside Sub A");
