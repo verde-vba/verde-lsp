@@ -110,3 +110,23 @@ fn option_explicit_flags_undeclared_in_if_header() {
         diagnostics
     );
 }
+
+#[test]
+fn option_explicit_flags_undeclared_in_set_rhs() {
+    let source = "Option Explicit\n\nSub Demo()\n    Dim target As Object\n    Set target = undeclaredSource\nEnd Sub\n";
+    let diagnostics = diagnose(source);
+
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.severity == Some(DiagnosticSeverity::WARNING)
+                && d.message.contains("undeclaredSource")),
+        "expected a Warning diagnostic naming 'undeclaredSource', got: {:?}",
+        diagnostics
+    );
+    assert!(
+        !diagnostics.iter().any(|d| d.message.contains("target")),
+        "did not expect any diagnostic naming 'target', got: {:?}",
+        diagnostics
+    );
+}
