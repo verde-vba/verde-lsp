@@ -59,3 +59,27 @@ fn rename_includes_call_site_in_workspace_edit() {
 
     assert_eq!(edits.len(), 2, "expected 2 edits: declaration + call site, got {}", edits.len());
 }
+
+#[test]
+fn cross_file_rename_includes_other_file_occurrences() {
+    // ModuleA has "Public Sub Foo()" — cursor on Foo (line 0, col 11)
+    let uri_a: Url = "file:///module_a.bas".parse().unwrap();
+    let src_a = "Public Sub Foo()\nEnd Sub\n";
+    // ModuleB calls Foo at line 2, col 4
+    let uri_b: Url = "file:///module_b.bas".parse().unwrap();
+    let src_b = "Sub Main()\n    Foo\nEnd Sub\n";
+
+    let host = AnalysisHost::new();
+    host.update(uri_a.clone(), src_a.to_string(), parser::parse(src_a));
+    host.update(uri_b.clone(), src_b.to_string(), parser::parse(src_b));
+
+    let edit = rename::rename(&host, &uri_a, Position::new(0, 11), "Bar")
+        .expect("expected WorkspaceEdit");
+    let changes = edit.changes.expect("expected changes");
+
+    assert!(
+        changes.contains_key(&uri_b),
+        "expected rename to include module_b, got keys: {:?}",
+        changes.keys().collect::<Vec<_>>()
+    );
+}
