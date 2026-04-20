@@ -1,15 +1,15 @@
 # verde-lsp バックログ
 
 > 最終更新: 2026-04-20  
-> 現在ブランチ: main (最新: 1525c2e)  
-> テスト基準: 66 green, cargo clippy -D warnings 0 件
+> 現在ブランチ: main (最新: a20b0cf)  
+> テスト基準: 67 green, cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+7)
+## 次 Sprint 推奨 (Sprint N+8)
 
-**新規 PBI を検討** — PBI-06 完了により Exit/GoTo/On Error の誤検知が解消。  
-候補: (B) rename の全識別子 WorkspaceEdit 精度向上、(C) シンボルスコープ（手続き境界）を考慮した completion フィルタリング。
+**新規 PBI を検討** — PBI-06+07 完了により rename が call site まで追跡できるようになった。  
+候補: (C) シンボルスコープ（手続き境界）を考慮した completion フィルタリング（SymbolTable に proc_scope を追加が必要）、または新規 PBI 検討。
 
 ---
 
@@ -64,6 +64,15 @@
 ---
 
 ~~**PBI-05b** — Do / ReDim StatementNode 化 → Sprint N+5 完了~~
+
+---
+
+## 完了済み (Sprint N+7)
+
+| コミット | 内容 |
+|----------|------|
+| `deca407` | feat: rename が call site も WorkspaceEdit に含むようになった (find_all_word_occurrences) |
+| `a20b0cf` | refactor: eq_ignore_ascii_case で文字列確保を除去 |
 
 ---
 
