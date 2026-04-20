@@ -4,18 +4,19 @@ use crate::analysis::resolve::{find_all_word_occurrences, find_word_at_position,
 use crate::analysis::AnalysisHost;
 
 pub fn find_references(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<Location> {
-    host.with_source(uri, |_, source| {
-        let word = match find_word_at_position(source, position) {
-            Some(w) => w,
-            None => return Vec::new(),
-        };
-        find_all_word_occurrences(source, &word)
-            .into_iter()
-            .map(|range| Location {
-                uri: uri.clone(),
-                range: text_range_to_lsp_range(source, range),
-            })
-            .collect()
-    })
-    .unwrap_or_default()
+    let word = match host.with_source(uri, |_, source| find_word_at_position(source, position)) {
+        Some(Some(w)) => w,
+        _ => return Vec::new(),
+    };
+
+    let mut locations = Vec::new();
+    for (file_uri, source) in host.all_file_sources() {
+        for range in find_all_word_occurrences(&source, &word) {
+            locations.push(Location {
+                uri: file_uri.clone(),
+                range: text_range_to_lsp_range(&source, range),
+            });
+        }
+    }
+    locations
 }

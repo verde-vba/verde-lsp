@@ -137,6 +137,15 @@ impl AnalysisHost {
         self.files.get(uri).map(|f| f.symbols.clone())
     }
 
+    /// Returns (uri, source) pairs for every registered file. Used by
+    /// cross-file features (e.g. references) to search all workspace files.
+    pub fn all_file_sources(&self) -> Vec<(Url, String)> {
+        self.files
+            .iter()
+            .map(|e| (e.key().clone(), e.source.clone()))
+            .collect()
+    }
+
     /// Returns all Public, module-level symbols from every file EXCEPT `current_uri`.
     /// Used for cross-module completion.
     pub fn all_public_symbols_from_other_files(&self, current_uri: &Url) -> Vec<symbols::Symbol> {
