@@ -146,6 +146,15 @@ impl<'a> Parser<'a> {
             return;
         };
 
+        // Parse the parameter list `(...)` if present. VBA allows `Sub Foo`
+        // without parentheses for a no-arg procedure, so we only descend into
+        // parameter parsing when an opening paren is the next token.
+        let params = if matches!(self.peek(), Some(t) if t.token == Token::LParen) {
+            self.parse_parameter_list()
+        } else {
+            Vec::new()
+        };
+
         // Skip to end of procedure
         let end_token = match kind {
             ProcedureKind::Sub => Token::EndSub,
@@ -164,7 +173,7 @@ impl<'a> Parser<'a> {
                     name,
                     kind,
                     visibility,
-                    params: Vec::new(),
+                    params,
                     return_type: None,
                     body: Vec::new(),
                     span: TextRange::new(start, end),
@@ -181,6 +190,175 @@ impl<'a> Parser<'a> {
             message: format!("Unterminated procedure: {}", name),
             span: start..end,
         });
+    }
+
+    /// Parse `(param, param, ...)` starting at the `LParen`. Returns arena
+    /// indices of `AstNode::Parameter` entries. Leaves `pos` just past the
+    /// matching `RParen` (or at end-of-stream if malformed).
+    fn parse_parameter_list(&mut self) -> Vec<NodeId> {
+        debug_assert!(matches!(self.peek(), Some(t) if t.token == Token::LParen));
+        self.pos += 1; // consume `(`
+
+        let mut params = Vec::new();
+        loop {
+            // Allow line continuations / whitespace tokens between parameters.
+            while matches!(
+                self.peek(),
+                Some(t) if t.token == Token::LineContinuation || t.token == Token::Newline
+            ) {
+                self.pos += 1;
+            }
+
+            match self.peek() {
+                None => return params,
+                Some(t) if t.token == Token::RParen => {
+                    self.pos += 1;
+                    return params;
+                }
+                Some(t) if t.token == Token::Comma => {
+                    // Stray leading/trailing comma; skip and continue.
+                    self.pos += 1;
+                    continue;
+                }
+                _ => {}
+            }
+
+            if let Some(id) = self.parse_one_parameter() {
+                params.push(id);
+            }
+
+            // After a parameter, expect comma or closing paren. Skip anything
+            // else defensively until we find one.
+            loop {
+                match self.peek() {
+                    None => return params,
+                    Some(t) if t.token == Token::Comma => {
+                        self.pos += 1;
+                        break;
+                    }
+                    Some(t) if t.token == Token::RParen => {
+                        self.pos += 1;
+                        return params;
+                    }
+                    _ => {
+                        self.pos += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Parse a single parameter slot: `[Optional] [ByVal|ByRef] [ParamArray]
+    /// Ident [()] [As Type] [= default]`. Returns the arena index of the
+    /// resulting `ParameterNode`, or `None` if no identifier was found.
+    fn parse_one_parameter(&mut self) -> Option<NodeId> {
+        let start_pos = self.pos;
+        let start_offset = self.tokens.get(start_pos).map(|t| t.span.start)?;
+
+        let mut is_optional = false;
+        let mut is_param_array = false;
+        let mut passing = ParameterPassing::ByRef;
+
+        // Modifiers can appear in any reasonable order; accept a few permutations.
+        loop {
+            match self.peek().map(|t| &t.token) {
+                Some(Token::Optional) => {
+                    is_optional = true;
+                    self.pos += 1;
+                }
+                Some(Token::ByVal) => {
+                    passing = ParameterPassing::ByVal;
+                    self.pos += 1;
+                }
+                Some(Token::ByRef) => {
+                    passing = ParameterPassing::ByRef;
+                    self.pos += 1;
+                }
+                Some(Token::ParamArray) => {
+                    is_param_array = true;
+                    self.pos += 1;
+                }
+                _ => break,
+            }
+        }
+
+        // Parameter name.
+        let name = match self.peek() {
+            Some(t) if t.token == Token::Identifier => {
+                let n = t.text.clone();
+                self.pos += 1;
+                n
+            }
+            _ => return None,
+        };
+
+        let mut end_offset = self
+            .tokens
+            .get(self.pos.saturating_sub(1))
+            .map(|t| t.span.end)
+            .unwrap_or(start_offset);
+
+        // Optional trailing `()` for array parameters — skip, do not capture.
+        if matches!(self.peek(), Some(t) if t.token == Token::LParen) {
+            self.pos += 1;
+            while let Some(t) = self.peek() {
+                if t.token == Token::RParen {
+                    end_offset = t.span.end;
+                    self.pos += 1;
+                    break;
+                }
+                self.pos += 1;
+            }
+        }
+
+        // Optional `As <Type>` clause.
+        let mut type_name = None;
+        if matches!(self.peek(), Some(t) if t.token == Token::As) {
+            self.pos += 1;
+            if let Some(t) = self.peek() {
+                // Accept any type-ish token (builtin type keyword or identifier).
+                // For the AST we only record identifier-like names; a builtin
+                // type token's `text` still holds the source text.
+                type_name = Some(t.text.clone());
+                end_offset = t.span.end;
+                self.pos += 1;
+            }
+        }
+
+        // Optional `= <default>` — skip tokens until the next top-level comma
+        // or closing paren, without capturing the default expression.
+        if matches!(self.peek(), Some(t) if t.token == Token::Eq) {
+            self.pos += 1;
+            let mut depth: i32 = 0;
+            while let Some(t) = self.peek() {
+                match t.token {
+                    Token::LParen => {
+                        depth += 1;
+                        self.pos += 1;
+                    }
+                    Token::RParen if depth == 0 => break,
+                    Token::RParen => {
+                        depth -= 1;
+                        self.pos += 1;
+                    }
+                    Token::Comma if depth == 0 => break,
+                    _ => {
+                        end_offset = t.span.end;
+                        self.pos += 1;
+                    }
+                }
+            }
+        }
+
+        let node = AstNode::Parameter(ParameterNode {
+            name,
+            type_name,
+            passing,
+            is_optional,
+            is_param_array,
+            span: TextRange::new(start_offset, end_offset),
+        });
+        Some(self.ast.nodes.alloc(node))
     }
 
     fn parse_property(&mut self, visibility: Visibility) {
