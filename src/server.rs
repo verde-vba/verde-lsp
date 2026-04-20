@@ -10,6 +10,7 @@ pub struct VbaLanguageServer {
     client: Client,
     documents: DashMap<Url, String>,
     analysis: AnalysisHost,
+    root_uri: std::sync::RwLock<Option<Url>>,
 }
 
 impl VbaLanguageServer {
@@ -18,12 +19,14 @@ impl VbaLanguageServer {
             client,
             documents: DashMap::new(),
             analysis: AnalysisHost::new(),
+            root_uri: std::sync::RwLock::new(None),
         }
     }
 
     async fn on_change(&self, uri: Url, text: String) {
         let parse_result = parser::parse(&text);
-        self.analysis.update(uri.clone(), text.clone(), parse_result);
+        self.analysis
+            .update(uri.clone(), text.clone(), parse_result);
         self.documents.insert(uri.clone(), text);
 
         let diagnostics = self.analysis.diagnostics(&uri);
@@ -35,7 +38,13 @@ impl VbaLanguageServer {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for VbaLanguageServer {
-    async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        // Capture workspace root for workbook-context.json discovery.
+        let root = params
+            .root_uri
+            .or_else(|| params.workspace_folders?.into_iter().next().map(|f| f.uri));
+        *self.root_uri.write().unwrap() = root;
+
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(

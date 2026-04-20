@@ -8,8 +8,17 @@ use tower_lsp::lsp_types::*;
 use crate::parser::ParseResult;
 use symbols::SymbolTable;
 
+/// Workspace-level context loaded from `workbook-context.json`.
+/// All fields are optional; absent keys default to empty.
+#[derive(Debug, Default, Clone, serde::Deserialize)]
+pub struct WorkbookContext {
+    #[serde(default)]
+    pub sheets: Vec<String>,
+}
+
 pub struct AnalysisHost {
     files: DashMap<Url, FileAnalysis>,
+    workbook_context: std::sync::RwLock<WorkbookContext>,
 }
 
 pub struct FileAnalysis {
@@ -28,7 +37,16 @@ impl AnalysisHost {
     pub fn new() -> Self {
         Self {
             files: DashMap::new(),
+            workbook_context: std::sync::RwLock::new(WorkbookContext::default()),
         }
+    }
+
+    pub fn set_workbook_context(&self, ctx: WorkbookContext) {
+        *self.workbook_context.write().unwrap() = ctx;
+    }
+
+    pub fn workbook_sheets(&self) -> Vec<String> {
+        self.workbook_context.read().unwrap().sheets.clone()
     }
 
     pub fn update(&self, uri: Url, source: String, parse_result: ParseResult) {
