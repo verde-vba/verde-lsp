@@ -598,6 +598,10 @@ impl<'a> Parser<'a> {
                 let (tokens, span) = self.collect_statement_tokens();
                 StatementNode::Redim(RedimStatementNode { tokens, span })
             }
+            Some(Token::Exit) => {
+                let (tokens, span) = self.collect_statement_tokens();
+                StatementNode::Exit(ExitStatementNode { tokens, span })
+            }
             _ => StatementNode::Expression(self.parse_expression_statement()),
         };
         AstNode::Statement(stmt)
@@ -1302,6 +1306,22 @@ mod tests {
                 );
             }
             other => panic!("expected Redim statement, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_captures_exit_sub_as_exit_statement() {
+        let result = parse("Sub F()\n    Exit Sub\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.body.len(), 1, "expected 1 body statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::Exit(node) => {
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::Exit),
+                    "expected the Exit keyword inside captured tokens"
+                );
+            }
+            other => panic!("expected Exit statement, got {:?}", other),
         }
     }
 }
