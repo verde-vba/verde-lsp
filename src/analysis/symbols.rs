@@ -6,6 +6,8 @@ use crate::parser::ast::*;
 pub struct SymbolTable {
     pub symbols: Vec<Symbol>,
     pub option_explicit: bool,
+    /// Full byte-range of each procedure in source order, used for cursor-scope detection.
+    pub proc_ranges: Vec<(SmolStr, TextRange)>,
 }
 
 #[derive(Debug, Clone)]
@@ -16,6 +18,8 @@ pub struct Symbol {
     pub visibility: Visibility,
     pub span: TextRange,
     pub detail: SymbolDetail,
+    /// None = module-level (visible everywhere); Some(name) = visible only inside that procedure.
+    pub proc_scope: Option<SmolStr>,
 }
 
 #[derive(Debug, Clone)]
@@ -60,10 +64,13 @@ pub struct ParameterInfo {
 
 pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
     let mut symbols = Vec::new();
+    let mut proc_ranges = Vec::new();
 
     for &node_id in &ast.root {
         match &ast.nodes[node_id] {
             AstNode::Procedure(proc) => {
+                proc_ranges.push((proc.name.clone(), proc.span));
+
                 let kind = match proc.kind {
                     ProcedureKind::Sub => SymbolKind::Procedure,
                     ProcedureKind::Function => SymbolKind::Function,
@@ -95,7 +102,21 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                             .collect(),
                         return_type: proc.return_type.clone(),
                     },
+                    proc_scope: None,
                 });
+                for &param_id in &proc.params {
+                    if let AstNode::Parameter(p) = &ast.nodes[param_id] {
+                        symbols.push(Symbol {
+                            name: p.name.clone(),
+                            kind: SymbolKind::Parameter,
+                            type_name: p.type_name.clone(),
+                            visibility: Visibility::Private,
+                            span: p.span,
+                            detail: SymbolDetail::None,
+                            proc_scope: Some(proc.name.clone()),
+                        });
+                    }
+                }
                 for &stmt_id in &proc.body {
                     if let AstNode::Statement(StatementNode::LocalDeclaration(decl)) =
                         &ast.nodes[stmt_id]
@@ -114,6 +135,7 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                                 visibility: Visibility::Private,
                                 span: *name_span,
                                 detail: SymbolDetail::Variable { is_static },
+                                proc_scope: Some(proc.name.clone()),
                             });
                         }
                     }
@@ -134,6 +156,7 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                     detail: SymbolDetail::Variable {
                         is_static: var.is_static,
                     },
+                    proc_scope: None,
                 });
             }
             AstNode::TypeDef(td) => {
@@ -146,6 +169,7 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                     detail: SymbolDetail::TypeDef {
                         members: Vec::new(),
                     },
+                    proc_scope: None,
                 });
             }
             AstNode::EnumDef(ed) => {
@@ -158,6 +182,7 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                     detail: SymbolDetail::EnumDef {
                         members: ed.members.clone(),
                     },
+                    proc_scope: None,
                 });
                 for (member_name, value) in &ed.members {
                     symbols.push(Symbol {
@@ -167,6 +192,7 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                         visibility: ed.visibility.clone(),
                         span: ed.span,
                         detail: SymbolDetail::None,
+                        proc_scope: None,
                     });
                     let _ = value;
                 }
@@ -178,6 +204,7 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
     SymbolTable {
         symbols,
         option_explicit: ast.option_explicit,
+        proc_ranges,
     }
 }
 

@@ -74,7 +74,7 @@ pub fn text_range_to_lsp_range(source: &str, range: TextRange) -> Range {
     Range::new(start, end)
 }
 
-fn position_to_offset(source: &str, position: Position) -> Option<usize> {
+pub fn position_to_offset(source: &str, position: Position) -> Option<usize> {
     let mut line = 0u32;
     let mut col = 0u32;
 
