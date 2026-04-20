@@ -1,6 +1,7 @@
 pub mod analysis;
 pub mod completion;
 pub mod definition;
+pub mod document_highlight;
 pub mod document_symbol;
 pub mod excel_model;
 pub mod hover;
