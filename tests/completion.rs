@@ -162,7 +162,6 @@ fn completion_includes_workbook_table_names() {
     );
 }
 
-#[test]
 // ── UDT dot-access completion (PBI-43) ───────────────────────────────────
 
 /// `f.` after `Dim f As MyType` should offer only MyType's members — no keywords/builtins.
@@ -244,7 +243,8 @@ fn dot_access_procedure_scoped_variable_resolves() {
     // line 4:     Dim f As MyType
     // line 5:     f.             <- cursor col 6
     // line 6: End Sub
-    let source = "Type MyType\n    x As Long\nEnd Type\nSub Test()\n    Dim f As MyType\n    f.\nEnd Sub\n";
+    let source =
+        "Type MyType\n    x As Long\nEnd Type\nSub Test()\n    Dim f As MyType\n    f.\nEnd Sub\n";
     let items = do_complete_at(source, 5, 6);
     let labels: Vec<&str> = items.iter().map(|(l, _, _)| l.as_str()).collect();
     assert!(
@@ -253,6 +253,7 @@ fn dot_access_procedure_scoped_variable_resolves() {
     );
 }
 
+#[test]
 fn completion_includes_workbook_named_ranges() {
     let uri: Url = "file:///test.bas".parse().unwrap();
     let src = "Sub Main()\nEnd Sub\n";
