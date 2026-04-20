@@ -156,3 +156,24 @@ End Sub"#;
         "unexpected warning for declared `lo`, got: {diags:?}"
     );
 }
+
+#[test]
+fn option_explicit_flags_undeclared_in_while_header() {
+    let source = "Option Explicit\n\nSub Demo()\n    While undeclaredCond\n    Wend\nEnd Sub\n";
+    let diags = diagnose(source);
+    assert!(
+        diags.iter().any(|d| {
+            d.severity == Some(DiagnosticSeverity::WARNING)
+                && d.message.contains("undeclaredCond")
+        }),
+        "expected Warning for undeclared 'undeclaredCond' in While header, got: {diags:?}"
+    );
+}
+
+#[test]
+fn does_not_warn_on_while_with_declared_condition() {
+    assert_no_diagnostics(
+        "Option Explicit\n\nSub Demo()\n    Dim running As Boolean\n    running = True\n    While running\n    Wend\nEnd Sub\n",
+        "While loop with declared condition variable",
+    );
+}

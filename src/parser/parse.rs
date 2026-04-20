@@ -587,6 +587,10 @@ impl<'a> Parser<'a> {
                 let (tokens, span) = self.collect_statement_tokens();
                 StatementNode::Set(SetStatementNode { tokens, span })
             }
+            Some(Token::While) => {
+                let (tokens, span) = self.collect_statement_tokens();
+                StatementNode::While(WhileStatementNode { tokens, span })
+            }
             _ => StatementNode::Expression(self.parse_expression_statement()),
         };
         AstNode::Statement(stmt)
@@ -1223,6 +1227,22 @@ mod tests {
                 );
             }
             other => panic!("expected Set statement, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_captures_while_statement_header() {
+        let result = parse("Sub F()\n    While x > 0\n    Wend\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert!(!proc.body.is_empty(), "expected at least one statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::While(node) => {
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::While),
+                    "expected the While keyword inside captured header tokens"
+                );
+            }
+            other => panic!("expected While statement, got {:?}", other),
         }
     }
 }
