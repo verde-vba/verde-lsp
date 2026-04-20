@@ -116,7 +116,7 @@ fn scan_procedure(
         };
         match stmt {
             StatementNode::LocalDeclaration(decl) => {
-                for (name, _) in &decl.names {
+                for (name, _, _) in &decl.names {
                     local_declared.insert(name.to_ascii_lowercase());
                 }
             }

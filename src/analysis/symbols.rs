@@ -102,7 +102,7 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                     {
                         let is_const = decl.kind == DeclKind::Const;
                         let is_static = decl.kind == DeclKind::Static;
-                        for (name, type_name) in &decl.names {
+                        for (name, type_name, name_span) in &decl.names {
                             symbols.push(Symbol {
                                 name: name.clone(),
                                 kind: if is_const {
@@ -112,7 +112,7 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                                 },
                                 type_name: type_name.clone(),
                                 visibility: Visibility::Private,
-                                span: decl.span,
+                                span: *name_span,
                                 detail: SymbolDetail::Variable { is_static },
                             });
                         }

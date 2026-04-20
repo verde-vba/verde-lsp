@@ -142,10 +142,10 @@ pub enum DeclKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalDeclarationNode {
     pub kind: DeclKind,
-    /// Names and optional types introduced by this declaration.
+    /// Names, optional types, and identifier spans introduced by this declaration.
     /// For `Dim a As Long, b As String, c` this holds
-    /// `[(a, Some("Long")), (b, Some("String")), (c, None)]`.
-    pub names: Vec<(SmolStr, Option<SmolStr>)>,
+    /// `[(a, Some("Long"), span_a), (b, Some("String"), span_b), (c, None, span_c)]`.
+    pub names: Vec<(SmolStr, Option<SmolStr>, TextRange)>,
     pub span: TextRange,
 }
 

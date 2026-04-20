@@ -481,7 +481,7 @@ impl<'a> Parser<'a> {
             self.pos += 1;
         }
 
-        let mut names: Vec<(SmolStr, Option<SmolStr>)> = Vec::new();
+        let mut names: Vec<(SmolStr, Option<SmolStr>, TextRange)> = Vec::new();
         let mut end_offset = start_offset;
         let mut paren_depth: i32 = 0;
         let mut expect_name = true;
@@ -494,7 +494,8 @@ impl<'a> Parser<'a> {
                     self.pos += 1;
                 }
                 Token::Identifier if expect_name && paren_depth == 0 => {
-                    names.push((t.text.clone(), None));
+                    let name_span = TextRange::new(t.span.start, t.span.end);
+                    names.push((t.text.clone(), None, name_span));
                     end_offset = t.span.end;
                     expect_name = false;
                     self.pos += 1;
@@ -886,7 +887,7 @@ mod tests {
         match statement(&result.ast, proc.body[0]) {
             StatementNode::LocalDeclaration(d) => {
                 assert_eq!(d.kind, DeclKind::Dim);
-                let names: Vec<&str> = d.names.iter().map(|(n, _)| n.as_str()).collect();
+                let names: Vec<&str> = d.names.iter().map(|(n, _, _)| n.as_str()).collect();
                 assert_eq!(names, vec!["x"]);
                 assert_eq!(d.names[0].1.as_deref(), Some("Long"));
             }
@@ -902,7 +903,7 @@ mod tests {
         match statement(&result.ast, proc.body[0]) {
             StatementNode::LocalDeclaration(d) => {
                 assert_eq!(d.kind, DeclKind::Dim);
-                let names: Vec<&str> = d.names.iter().map(|(n, _)| n.as_str()).collect();
+                let names: Vec<&str> = d.names.iter().map(|(n, _, _)| n.as_str()).collect();
                 assert_eq!(names, vec!["a", "b", "c"]);
                 assert_eq!(d.names[0].1.as_deref(), Some("Long"));
                 assert_eq!(d.names[1].1.as_deref(), Some("String"));
@@ -925,7 +926,7 @@ mod tests {
         );
         match statement(&result.ast, proc.body[0]) {
             StatementNode::LocalDeclaration(d) => {
-                let names: Vec<&str> = d.names.iter().map(|(n, _)| n.as_str()).collect();
+                let names: Vec<&str> = d.names.iter().map(|(n, _, _)| n.as_str()).collect();
                 assert_eq!(names, vec!["x"]);
             }
             other => panic!("expected LocalDeclaration first, got {:?}", other),
@@ -948,7 +949,7 @@ mod tests {
         match statement(&result.ast, proc.body[0]) {
             StatementNode::LocalDeclaration(d) => {
                 assert_eq!(d.kind, DeclKind::Const);
-                let names: Vec<&str> = d.names.iter().map(|(n, _)| n.as_str()).collect();
+                let names: Vec<&str> = d.names.iter().map(|(n, _, _)| n.as_str()).collect();
                 assert_eq!(names, vec!["PI"]);
                 assert_eq!(d.names[0].1.as_deref(), Some("Double"));
             }
