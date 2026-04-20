@@ -1,24 +1,54 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+10 完了)
+> 最終更新: 2026-04-21 (Sprint N+11 完了)
 > 現在ブランチ: main
-> テスト基準: 64 green (lib 36 + integration 28), cargo clippy -D warnings 0 件
+> テスト基準: 66 green (lib 36 + integration 30), cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+11)
+## 次 Sprint 推奨 (Sprint N+12)
 
-**Sprint Goal**: PBI-09b を完遂し、クロスモジュール hover/goto-def を届ける
+**Sprint Goal**: PBI-09c を完遂し、クロスモジュール diagnostics を届ける
 
-### PBI-09b — クロスモジュール hover / go-to-definition (Small) ✅ Ready
+### PBI-09c — クロスモジュール diagnostics: 他モジュール Public シンボルを未宣言変数検出から除外 (Small) ✅ Ready
 
 | 項目 | 内容 |
 |------|------|
-| **目的** | `hover()` と `go_to_definition()` で他モジュールの Public シンボルを参照できるようにする。 |
-| **背景** | PBI-09a でクロスモジュール補完を実装。`all_public_symbols_from_other_files()` が既存のため hover/definition への拡張は小規模。 |
-| **受入基準** | (1) モジュール A の `Public Sub Foo()` にモジュール B から hover すると型情報が表示される。(2) go-to-definition でモジュール A の定義箇所に飛べる。(3) `cargo test` 65+ green, clippy 0 件 |
+| **目的** | Option Explicit 有効時、他モジュールで定義された `Public Sub/Function/変数` を呼び出しても「未宣言変数」として誤検出されないようにする。 |
+| **背景** | PBI-09a/b でクロスモジュール補完・hover/goto-def を実装。diagnostics はまだ単一ファイルしか参照しないため、`Call ModuleA.Foo` が undeclared 扱いされる。`all_public_symbols_from_other_files()` が既存のため拡張は小規模。 |
+| **受入基準** | (1) Option Explicit 有効なモジュール B から `Public Sub Foo()` を定義するモジュール A の Foo を呼び出しても undeclared 診断が出ない。(2) `cargo test` 67+ green, clippy 0 件 |
 | **見積サイズ** | S |
 | **依存** | PBI-09a (完了済み) |
+
+---
+
+## Sprint N+11 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-09b クロスモジュール hover/goto-def を届ける」を完全達成。
+
+### KPT
+
+#### Keep
+- `find_public_symbol_in_other_files()` の設計判断: URI を返す必要があるため `all_public_symbols_from_other_files()` と分離した。2 つのメソッドが責務で明確に分かれた（全件 vs 名前検索）。
+- `symbol_to_hover` ヘルパー抽出が GREEN フェーズで自然に発生し、REFACTOR フェーズのコミット不要に繋がった。Tidy First/After より GREEN 時点でのヘルパー抽出が効率的なケースがある。
+- Phase 5/6 で「変更不要」の判断を迷わず下せた — 「3 行以上の同一ロジック」という明確な基準が効いた。
+
+#### Problem
+- RED テスト 2 件の word 抽出位置（col=4, col=9）を試行錯誤せずに確定できなかった可能性。テスト設計時に source 文字列のオフセットを手計算する手間が発生した。
+
+#### Try
+- RED テスト記述時に position の根拠（"Call Foo" の "F" は col=9）をコメントで残す習慣をつける。
+
+---
+
+## 完了済み (Sprint N+11)
+
+| コミット | 内容 |
+|----------|------|
+| `c217de0` | test: クロスモジュール hover/goto-def RED テスト 2 件 (PBI-09b) |
+| `73c81f0` | feat: クロスモジュール hover/goto-def — find_public_symbol_in_other_files + fallback 追加 (PBI-09b) |
 
 ---
 
@@ -121,7 +151,7 @@
 
 | PBI | タイトル | サイズ | 状態 |
 |-----|----------|--------|------|
-| PBI-09b | クロスモジュール hover / go-to-definition | S | **Ready** |
+| PBI-09c | クロスモジュール diagnostics (undeclared 誤検出除外) | S | **Ready** |
 
 ---
 
