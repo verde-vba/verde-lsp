@@ -212,6 +212,76 @@ fn rename_from_use_site_stays_within_its_procedure() {
 }
 
 #[test]
+fn rename_parameter_stays_within_its_procedure() {
+    // Two Sub procs each declaring a parameter named "x".
+    // Renaming "x" from Sub A's declaration site must NOT touch Sub B's "x".
+    //
+    // Sub A(x As Integer)   <- line 0, 'x' at col 6
+    //     x = 1             <- line 1
+    // End Sub               <- line 2
+    // Sub B(x As Integer)   <- line 3
+    //     x = 1             <- line 4
+    // End Sub               <- line 5
+    let source =
+        "Sub A(x As Integer)\n    x = 1\nEnd Sub\nSub B(x As Integer)\n    x = 1\nEnd Sub\n";
+    let position = Position::new(0, 6); // 'x' in Sub A's parameter declaration
+
+    let edit = do_rename(source, position, "myParam").expect("expected WorkspaceEdit");
+    let changes = edit.changes.unwrap();
+    let uri: Url = "file:///test.bas".parse().unwrap();
+    let edits = changes.get(&uri).expect("expected edits for file URI");
+
+    assert_eq!(
+        edits.len(),
+        2,
+        "expected 2 renames (Sub A's x only: decl + use), got {} — Sub B's x must NOT be renamed",
+        edits.len()
+    );
+    for e in edits {
+        assert!(
+            e.range.start.line < 3,
+            "rename must stay within Sub A (lines 0-2), found edit at line {}",
+            e.range.start.line
+        );
+    }
+}
+
+#[test]
+fn rename_parameter_from_use_site_stays_within_its_procedure() {
+    // Same two-procedure source: cursor is on the use site of x inside Sub A's body.
+    // The rename must still be constrained to Sub A.
+    //
+    // Sub A(x As Integer)   <- line 0
+    //     x = 1             <- line 1, 'x' at col 4
+    // End Sub               <- line 2
+    // Sub B(x As Integer)   <- line 3
+    //     x = 1             <- line 4
+    // End Sub               <- line 5
+    let source =
+        "Sub A(x As Integer)\n    x = 1\nEnd Sub\nSub B(x As Integer)\n    x = 1\nEnd Sub\n";
+    let position = Position::new(1, 4); // 'x' in "    x = 1" (use site in Sub A)
+
+    let edit = do_rename(source, position, "myParam").expect("expected WorkspaceEdit");
+    let changes = edit.changes.unwrap();
+    let uri: Url = "file:///test.bas".parse().unwrap();
+    let edits = changes.get(&uri).expect("expected edits for file URI");
+
+    assert_eq!(
+        edits.len(),
+        2,
+        "expected 2 renames (Sub A's x: decl + use), got {} — Sub B's x must NOT be renamed",
+        edits.len()
+    );
+    for e in edits {
+        assert!(
+            e.range.start.line < 3,
+            "rename must stay within Sub A (lines 0-2), found edit at line {}",
+            e.range.start.line
+        );
+    }
+}
+
+#[test]
 fn rename_local_variable_stays_in_single_file() {
     // "Sub Foo()\n    Dim x As Integer\n    x = 1\nEnd Sub\n"
     // line 1: "    Dim x As Integer"
