@@ -167,13 +167,14 @@ impl<'a> Parser<'a> {
         let start = self.tokens[self.pos].span.start;
         self.pos += 1; // skip Sub/Function
 
-        let name = if let Some(tok) = self.peek() {
+        let (name, name_span) = if let Some(tok) = self.peek() {
             if tok.token == Token::Identifier {
                 let n = tok.text.clone();
+                let s = TextRange::new(tok.span.start, tok.span.end);
                 self.pos += 1;
-                n
+                (n, s)
             } else {
-                SmolStr::new("?")
+                (SmolStr::new("?"), TextRange::new(start, start))
             }
         } else {
             return;
@@ -246,6 +247,7 @@ impl<'a> Parser<'a> {
 
                     let node = AstNode::Procedure(ProcedureNode {
                         name,
+                        name_span,
                         kind,
                         visibility,
                         params,

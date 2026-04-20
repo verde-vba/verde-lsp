@@ -74,7 +74,7 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                     kind,
                     type_name: proc.return_type.clone(),
                     visibility: proc.visibility.clone(),
-                    span: proc.span,
+                    span: proc.name_span,
                     detail: SymbolDetail::Procedure {
                         kind: proc.kind.clone(),
                         params: proc

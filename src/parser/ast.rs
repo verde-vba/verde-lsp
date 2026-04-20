@@ -50,6 +50,7 @@ pub struct ModuleNode {
 #[derive(Debug, Clone)]
 pub struct ProcedureNode {
     pub name: SmolStr,
+    pub name_span: TextRange,
     pub kind: ProcedureKind,
     pub visibility: Visibility,
     pub params: Vec<NodeId>,
