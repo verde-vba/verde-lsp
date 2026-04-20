@@ -89,7 +89,7 @@ pub fn position_to_offset(source: &str, position: Position) -> Option<usize> {
             line += 1;
             col = 0;
         } else {
-            col += 1;
+            col += ch.len_utf16() as u32;
         }
     }
 
@@ -112,7 +112,7 @@ fn offset_to_position(source: &str, offset: usize) -> Position {
             line += 1;
             col = 0;
         } else {
-            col += 1;
+            col += ch.len_utf16() as u32;
         }
     }
 
