@@ -1,5 +1,6 @@
 pub mod analysis;
 pub mod code_action;
+pub mod formatting;
 pub mod completion;
 pub mod definition;
 pub mod document_highlight;
