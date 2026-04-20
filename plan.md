@@ -8,7 +8,18 @@
 
 ## 次 Sprint 推奨 (Sprint N+18)
 
-**Sprint Goal 候補**: 新規 PBI を Refinement 後に実行
+**Sprint Goal**: PBI-16 を完遂し、textDocument/references をクロスファイルに拡張する
+
+### PBI-16 — textDocument/references クロスファイル拡張 (S) ✅ Ready
+
+| 項目 | 内容 |
+|------|------|
+| **目的** | `find_references` が現在ファイルだけでなく全ファイルを検索し、ワークスペース全体の参照箇所を返す。 |
+| **背景** | PBI-15 で単一ファイル実装済み。`AnalysisHost.files` は private。`all_file_sources() -> Vec<(Url, String)>` ヘルパーを追加して全ファイルを横断する。 |
+| **実装方針** | `AnalysisHost::all_file_sources()` を追加。`find_references` がカーソルの単語を取得後、全ファイルで `find_all_word_occurrences` を呼んで Location を集約する。 |
+| **受入基準** | (1) 2 ファイル workspace でシンボル X が両ファイルにあるとき references が両ファイルの Location を返す。(2) 79+ green, clippy 0。 |
+| **見積サイズ** | S |
+| **依存** | PBI-15 (完了済み) |
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -357,6 +368,7 @@
 | PBI-13 | workbook-context.json tables/named_ranges 補完拡張 | XS | **Done** |
 | PBI-14 | workbook-context.json 自動再読み込み (didChangeWatchedFiles) | S | **Done** |
 | PBI-15 | textDocument/references プロバイダ実装 | XS | **Done** |
+| PBI-16 | textDocument/references クロスファイル拡張 | S | **Ready** |
 | PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
