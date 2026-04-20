@@ -184,7 +184,7 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                     },
                     proc_scope: None,
                 });
-                for (member_name, value) in &ed.members {
+                for (member_name, _value) in &ed.members {
                     symbols.push(Symbol {
                         name: member_name.clone(),
                         kind: SymbolKind::EnumMember,
@@ -194,7 +194,6 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                         detail: SymbolDetail::None,
                         proc_scope: None,
                     });
-                    let _value = value;
                 }
             }
             _ => {}
