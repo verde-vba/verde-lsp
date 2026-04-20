@@ -1,8 +1,80 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+32 完了)
+> 最終更新: 2026-04-21 (Sprint N+32 完了 + 詳細ロードマップ策定)
 > 現在ブランチ: main
 > テスト基準: 104 green (lib 42 + integration 62), cargo clippy -D warnings 0 件
+
+---
+
+## 詳細ロードマップ (2026-04-21 策定)
+
+### 前提軸
+
+| 軸 | 決定 | 影響 |
+|---|---|---|
+| 主要利用シナリオ | **Verde desktop 組み込み最優先** | VS Code 拡張は後回し可。配布は Verde 同梱経路 |
+| ユーザー像 | **既存 VBA 開発者** (補完/rename/refactor 重視) | signature help / workspace symbol / format を高優先 |
+| 非機能 | Windows 対応は**今すぐ** (Windows 専用開発) | CI/配布を Phase 0 に昇格 |
+
+### Phase 0 — Windows 基盤 & 重大バグ潰し (最優先 / 1-2 Sprint)
+
+Windows 配布の前に踏み抜くと致命的な問題を先に解消する。
+
+| PBI | タイトル | サイズ | 根拠 |
+|---|---|---|---|
+| PBI-31 | `position_to_offset` を UTF-16 対応 (LSP 準拠) | S | `src/analysis/resolve.rs:77` が char 単位でカウント。サロゲートペア/astral plane 文字で goto-def/hover/rename が 1 文字ずれる可能性 |
+| PBI-32 | parser の `.expect()` 除去 — 不正入力でプロセスを落とさない | XS | `src/parser/parse.rs:860`, `:1426` の panic 経路。LSP サーバー死亡 = エディタ機能停止 |
+| PBI-33 | Windows CI 追加 (GitHub Actions `windows-latest`) | S | build/test/clippy matrix、`file:///C:/...` URI 経路確認 |
+| PBI-34 | リリースバイナリ自動配布 (tag → `verde-lsp.exe`) | S | Verde desktop 同梱経路の実現 |
+
+### Phase 1 — 既存開発者の日常機能 (2-3 Sprint)
+
+毎日使う機能群。既存 VBA 開発者の体験を底上げする。
+
+| PBI | タイトル | サイズ |
+|---|---|---|
+| PBI-35 | `textDocument/signatureHelp` — 関数呼び出し中のパラメータ表示 | M |
+| PBI-36 | `workspace/symbol` — プロジェクト横断シンボル検索 | S |
+| PBI-37 | `textDocument/documentHighlight` — 同名シンボルハイライト | XS |
+| PBI-38 | `textDocument/foldingRange` — Sub/Function/With ブロック折りたたみ | S |
+| PBI-39 | `textDocument/codeAction` — "Dim を追加" quick fix (Option Explicit 連携) | M |
+
+### Phase 2 — Verde desktop 統合検証 (1 Sprint)
+
+配布物が Verde から正しく動くことを保証する。
+
+| PBI | タイトル | サイズ |
+|---|---|---|
+| PBI-40 | Verde からの stdio 起動 E2E テスト | S |
+| PBI-41 | `workbook-context.json` 書き出し経路の検証 (サーバー側は受信のみ) | XS |
+| PBI-42 | ログ出力方針統一 (`env_logger` → stderr、Verde 側でピックアップ可能に) | XS |
+
+### Phase 3 — Symbol 精度強化 (2-3 Sprint / 重い)
+
+parser 拡張を含むため工数大。Phase 1/2 で体験が整った後に着手。
+
+| PBI | タイトル | サイズ |
+|---|---|---|
+| PBI-43 | UDT (`Type` ブロック) メンバー解決 — `foo.bar` の `.bar` completion/hover | L |
+| PBI-44 | Class module (`.cls`) サポート — `Me` / インスタンス変数 | L |
+| PBI-45 | Excel Object Model 拡充 (PivotTable, Chart, Shape) | M |
+
+### Phase 4 — Polish & リファクタ系キラー機能
+
+差別化要素。refactor 重視ユーザーに効く。
+
+| PBI | タイトル | サイズ |
+|---|---|---|
+| PBI-46 | `textDocument/formatting` — indent / 識別子 case 正規化 | M |
+| PBI-47 | Extract Sub/Function リファクタ (code action) | L |
+| PBI-48 | `textDocument/inlayHint` — 暗黙 `As Variant` 等の型ヒント | S |
+| PBI-49 | call hierarchy (呼び出し元/先ツリー) | M |
+
+### 判断メモ
+
+- Phase 0 の UTF-16 バグ (PBI-31) は**実害が出る前に**潰す。現状 BMP 日本語 (ひらがな/漢字) は偶然動くが、文字列リテラルの emoji 等で破綻
+- Class module (PBI-44) の優先度は Verde 利用プロジェクトに `.cls` がどれだけ含まれるかで変動 — 要データ収集
+- formatting (PBI-46) は「既存開発者」軸なら Phase 1 に繰り上げる余地あり
 
 ---
 
@@ -567,6 +639,25 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-28 | Enum member value で負数・16 進 literal 対応 | XS | **Done** |
 | PBI-29 | Enum member implicit value 計算（前メンバ + 1） | XS | **Done** |
 | PBI-30b | SymbolDetail::EnumMember.value を Option<i64> → i64（Tidy First 型変更） | XS | **Done** |
+| PBI-31 | `position_to_offset` を UTF-16 対応 (LSP 準拠) | S | Ready (Phase 0) |
+| PBI-32 | parser の `.expect()` 除去 — 不正入力で落とさない | XS | Ready (Phase 0) |
+| PBI-33 | Windows CI 追加 (`windows-latest` matrix) | S | Ready (Phase 0) |
+| PBI-34 | リリースバイナリ自動配布 (tag → `verde-lsp.exe`) | S | Ready (Phase 0) |
+| PBI-35 | `textDocument/signatureHelp` 実装 | M | Backlog (Phase 1) |
+| PBI-36 | `workspace/symbol` — プロジェクト横断検索 | S | Backlog (Phase 1) |
+| PBI-37 | `textDocument/documentHighlight` — 同名ハイライト | XS | Backlog (Phase 1) |
+| PBI-38 | `textDocument/foldingRange` — ブロック折りたたみ | S | Backlog (Phase 1) |
+| PBI-39 | `textDocument/codeAction` — "Dim を追加" quick fix | M | Backlog (Phase 1) |
+| PBI-40 | Verde からの stdio 起動 E2E テスト | S | Backlog (Phase 2) |
+| PBI-41 | `workbook-context.json` 書き出し経路検証 | XS | Backlog (Phase 2) |
+| PBI-42 | ログ出力方針統一 (`env_logger` → stderr) | XS | Backlog (Phase 2) |
+| PBI-43 | UDT メンバー解決 (`foo.bar` completion/hover) | L | Backlog (Phase 3) |
+| PBI-44 | Class module (`.cls`) サポート | L | Backlog (Phase 3) |
+| PBI-45 | Excel Object Model 拡充 (PivotTable/Chart/Shape) | M | Backlog (Phase 3) |
+| PBI-46 | `textDocument/formatting` — indent/case 正規化 | M | Backlog (Phase 4) |
+| PBI-47 | Extract Sub/Function リファクタ (code action) | L | Backlog (Phase 4) |
+| PBI-48 | `textDocument/inlayHint` — 暗黙 `As Variant` 表示 | S | Backlog (Phase 4) |
+| PBI-49 | call hierarchy プロバイダ | M | Backlog (Phase 4) |
 
 ---
 
