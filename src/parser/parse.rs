@@ -760,6 +760,23 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// After consuming an enum member identifier, optionally read `= <integer-literal>`.
+    /// Returns None for missing `=`, non-integer expressions, hex literals, negatives, or
+    /// anything that doesn't parse as `i64` — keeping the MVP scope minimal.
+    fn try_parse_enum_member_value(&mut self) -> Option<i64> {
+        if !matches!(self.peek(), Some(t) if t.token == Token::Eq) {
+            return None;
+        }
+        self.pos += 1;
+        let tok = self.peek()?;
+        if tok.token != Token::NumberLiteral {
+            return None;
+        }
+        let parsed = tok.text.parse::<i64>().ok();
+        self.pos += 1;
+        parsed
+    }
+
     fn parse_enum_def(&mut self, visibility: Visibility) {
         let start = self.tokens[self.pos].span.start;
         self.pos += 1;
@@ -797,7 +814,11 @@ impl<'a> Parser<'a> {
                 return;
             }
             if self.tokens[self.pos].token == Token::Identifier {
-                members.push((self.tokens[self.pos].text.clone(), None));
+                let member_name = self.tokens[self.pos].text.clone();
+                self.pos += 1;
+                let value = self.try_parse_enum_member_value();
+                members.push((member_name, value));
+                continue;
             }
             self.pos += 1;
         }
