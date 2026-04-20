@@ -44,7 +44,10 @@ fn local_dim_is_child_of_procedure() {
     let syms = make_symbols(src);
     let children = syms[0].children.as_ref().expect("Foo should have children");
     let names: Vec<&str> = children.iter().map(|s| s.name.as_str()).collect();
-    assert!(names.contains(&"counter"), "expected local 'counter', got: {names:?}");
+    assert!(
+        names.contains(&"counter"),
+        "expected local 'counter', got: {names:?}"
+    );
 }
 
 #[test]
@@ -52,7 +55,10 @@ fn module_level_dim_is_top_level() {
     let src = "Dim total As Long\nSub Foo()\nEnd Sub\n";
     let syms = make_symbols(src);
     let names: Vec<&str> = syms.iter().map(|s| s.name.as_str()).collect();
-    assert!(names.contains(&"total"), "expected module-level 'total', got: {names:?}");
+    assert!(
+        names.contains(&"total"),
+        "expected module-level 'total', got: {names:?}"
+    );
     let total = syms.iter().find(|s| s.name == "total").unwrap();
     assert_eq!(total.kind, SymbolKind::VARIABLE);
 }

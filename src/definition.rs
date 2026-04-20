@@ -25,10 +25,14 @@ pub fn goto_definition(
     }
 
     // Fallback: cross-module public symbols
-    let word = host.with_source(uri, |_, source| resolve::find_word_at_position(source, position))??;
+    let word = host.with_source(uri, |_, source| {
+        resolve::find_word_at_position(source, position)
+    })??;
     let (other_uri, sym) = host.find_public_symbol_in_other_files(uri, &word)?;
     let range = host.with_source(&other_uri, |_, source| {
         resolve::text_range_to_lsp_range(source, sym.span)
     })?;
-    Some(GotoDefinitionResponse::Scalar(Location::new(other_uri, range)))
+    Some(GotoDefinitionResponse::Scalar(Location::new(
+        other_uri, range,
+    )))
 }

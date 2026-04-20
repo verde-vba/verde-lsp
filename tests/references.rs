@@ -19,7 +19,10 @@ fn references_returns_all_occurrences_of_symbol() {
     let src = "Sub Foo()\nEnd Sub\nSub Main()\n    Foo\nEnd Sub\n";
     let refs = find_refs(src, 0, 5); // cursor on "Foo" declaration
     assert_eq!(refs.len(), 2, "expected 2 references to Foo, got: {refs:?}");
-    assert!(refs.contains(&(0, 4)), "expected declaration at line 0 col 4");
+    assert!(
+        refs.contains(&(0, 4)),
+        "expected declaration at line 0 col 4"
+    );
     assert!(refs.contains(&(3, 4)), "expected call site at line 3 col 4");
 }
 

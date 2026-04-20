@@ -18,7 +18,9 @@ pub fn hover(host: &AnalysisHost, uri: &Url, position: Position) -> Option<Hover
     }
 
     // Fallback: cross-module public symbols
-    let word = host.with_source(uri, |_, source| resolve::find_word_at_position(source, position))??;
+    let word = host.with_source(uri, |_, source| {
+        resolve::find_word_at_position(source, position)
+    })??;
     let (_other_uri, sym) = host.find_public_symbol_in_other_files(uri, &word)?;
     Some(symbol_to_hover(&sym))
 }

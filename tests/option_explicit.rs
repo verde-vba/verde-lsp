@@ -152,7 +152,9 @@ End Sub"#;
     );
     // lo is declared — must NOT be warned
     assert!(
-        !diags.iter().any(|d| d.message.to_lowercase().contains("'lo'")),
+        !diags
+            .iter()
+            .any(|d| d.message.to_lowercase().contains("'lo'")),
         "unexpected warning for declared `lo`, got: {diags:?}"
     );
 }
@@ -163,8 +165,7 @@ fn option_explicit_flags_undeclared_in_while_header() {
     let diags = diagnose(source);
     assert!(
         diags.iter().any(|d| {
-            d.severity == Some(DiagnosticSeverity::WARNING)
-                && d.message.contains("undeclaredCond")
+            d.severity == Some(DiagnosticSeverity::WARNING) && d.message.contains("undeclaredCond")
         }),
         "expected Warning for undeclared 'undeclaredCond' in While header, got: {diags:?}"
     );
@@ -233,7 +234,9 @@ fn qualified_module_name_not_flagged_as_undeclared() {
 
     let diags = host.diagnostics(&uri_b);
     assert!(
-        !diags.iter().any(|d| d.message.to_lowercase().contains("modulea")),
+        !diags
+            .iter()
+            .any(|d| d.message.to_lowercase().contains("modulea")),
         "expected no undeclared warning for ModuleA (it is a known module name), got: {diags:?}"
     );
 }
@@ -253,7 +256,9 @@ fn qualified_module_name_truly_unknown_still_detected() {
 
     let diags = host.diagnostics(&uri_b);
     assert!(
-        diags.iter().any(|d| d.message.to_lowercase().contains("unknownmod")),
+        diags
+            .iter()
+            .any(|d| d.message.to_lowercase().contains("unknownmod")),
         "expected undeclared warning for UnknownMod (not a registered module), got: {diags:?}"
     );
 }

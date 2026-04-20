@@ -23,8 +23,7 @@ fn hover_on_local_variable_shows_type() {
     //                    ^ col 8
     let source = "Sub Foo()\n    Dim x As String\nEnd Sub\n";
     let position = Position::new(1, 8); // on 'x'
-    let content = do_hover(source, position)
-        .expect("expected hover result for local variable");
+    let content = do_hover(source, position).expect("expected hover result for local variable");
     assert!(
         content.contains("x") && content.contains("String"),
         "expected hover to show 'x' with type 'String', got: {:?}",
@@ -70,8 +69,7 @@ fn hover_on_sub_name_shows_parameter_list() {
     let source = "Sub Foo(x As Long, y As String)\nEnd Sub\n";
     let position = Position::new(0, 4); // on 'F' of "Foo"
 
-    let content = do_hover(source, position)
-        .expect("expected hover result, got None");
+    let content = do_hover(source, position).expect("expected hover result, got None");
 
     assert!(
         content.contains("x As Long"),

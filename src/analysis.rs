@@ -1,6 +1,6 @@
-pub mod symbols;
-pub mod resolve;
 pub mod diagnostics;
+pub mod resolve;
+pub mod symbols;
 
 use dashmap::DashMap;
 use tower_lsp::lsp_types::*;
@@ -125,12 +125,10 @@ impl AnalysisHost {
             .collect()
     }
 
-    pub fn with_source<T>(
-        &self,
-        uri: &Url,
-        f: impl FnOnce(&SymbolTable, &str) -> T,
-    ) -> Option<T> {
-        self.files.get(uri).map(|file| f(&file.symbols, &file.source))
+    pub fn with_source<T>(&self, uri: &Url, f: impl FnOnce(&SymbolTable, &str) -> T) -> Option<T> {
+        self.files
+            .get(uri)
+            .map(|file| f(&file.symbols, &file.source))
     }
 
     pub fn symbol_table(&self, uri: &Url) -> Option<SymbolTable> {

@@ -53,7 +53,10 @@ fn completion_local_var_not_visible_in_other_proc() {
     let source = "Sub A()\n    Dim x As Long\nEnd Sub\nSub B()\n    \nEnd Sub\n";
     let items = do_complete_at(source, 4, 4);
     let found = items.iter().find(|(label, _, _)| label == "x");
-    assert!(found.is_none(), "expected 'x' NOT in completion inside Sub B");
+    assert!(
+        found.is_none(),
+        "expected 'x' NOT in completion inside Sub B"
+    );
 }
 
 #[test]
@@ -62,7 +65,10 @@ fn completion_module_var_visible_everywhere() {
     let source = "Dim m As String\nSub A()\n    \nEnd Sub\n";
     let items = do_complete_at(source, 2, 4);
     let found = items.iter().find(|(label, _, _)| label == "m");
-    assert!(found.is_some(), "expected module var 'm' visible inside Sub A");
+    assert!(
+        found.is_some(),
+        "expected module var 'm' visible inside Sub A"
+    );
 }
 
 #[test]
@@ -76,7 +82,10 @@ fn completion_param_visible_in_own_proc_only() {
     // inside Sub B: param must NOT appear
     let items_b = do_complete_at(source, 4, 4);
     let found_b = items_b.iter().find(|(label, _, _)| label == "p");
-    assert!(found_b.is_none(), "expected param 'p' NOT visible inside Sub B");
+    assert!(
+        found_b.is_none(),
+        "expected param 'p' NOT visible inside Sub B"
+    );
 }
 
 #[test]

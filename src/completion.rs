@@ -78,9 +78,24 @@ pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<Compl
     }
 
     // Workbook names from workbook-context.json
-    push_named_items(&mut items, host.workbook_sheets(), CompletionItemKind::MODULE, "Worksheet");
-    push_named_items(&mut items, host.workbook_tables(), CompletionItemKind::STRUCT, "Table");
-    push_named_items(&mut items, host.workbook_named_ranges(), CompletionItemKind::CONSTANT, "Named Range");
+    push_named_items(
+        &mut items,
+        host.workbook_sheets(),
+        CompletionItemKind::MODULE,
+        "Worksheet",
+    );
+    push_named_items(
+        &mut items,
+        host.workbook_tables(),
+        CompletionItemKind::STRUCT,
+        "Table",
+    );
+    push_named_items(
+        &mut items,
+        host.workbook_named_ranges(),
+        CompletionItemKind::CONSTANT,
+        "Named Range",
+    );
 
     items
 }
@@ -101,7 +116,11 @@ fn push_named_items(
     }
 }
 
-fn proc_at_position(symbols: &SymbolTable, source: &str, position: Position) -> Option<smol_str::SmolStr> {
+fn proc_at_position(
+    symbols: &SymbolTable,
+    source: &str,
+    position: Position,
+) -> Option<smol_str::SmolStr> {
     let offset = position_to_offset(source, position)?;
     symbols
         .proc_ranges

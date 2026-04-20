@@ -23,7 +23,9 @@ fn build_hierarchy(table: &symbols::SymbolTable, source: &str) -> Vec<DocumentSy
 
         let full_range = if matches!(
             sym.kind,
-            symbols::SymbolKind::Procedure | symbols::SymbolKind::Function | symbols::SymbolKind::Property
+            symbols::SymbolKind::Procedure
+                | symbols::SymbolKind::Function
+                | symbols::SymbolKind::Property
         ) {
             table
                 .proc_ranges
@@ -45,7 +47,11 @@ fn build_hierarchy(table: &symbols::SymbolTable, source: &str) -> Vec<DocumentSy
             deprecated: None,
             range: full_range,
             selection_range,
-            children: if children.is_empty() { None } else { Some(children) },
+            children: if children.is_empty() {
+                None
+            } else {
+                Some(children)
+            },
             tags: None,
         });
     }

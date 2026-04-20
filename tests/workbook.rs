@@ -23,7 +23,8 @@ fn reload_workbook_context_from_json_path() {
         "expected T1 in tables after reload"
     );
     assert!(
-        host.workbook_named_ranges().contains(&"MyRange".to_string()),
+        host.workbook_named_ranges()
+            .contains(&"MyRange".to_string()),
         "expected MyRange in named_ranges after reload"
     );
 
