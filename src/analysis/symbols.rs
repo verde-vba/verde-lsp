@@ -42,6 +42,11 @@ pub enum SymbolDetail {
         params: Vec<ParameterInfo>,
         return_type: Option<SmolStr>,
     },
+    Parameter {
+        type_name: Option<SmolStr>,
+        passing: ParameterPassing,
+        is_optional: bool,
+    },
     Variable {
         is_static: bool,
     },
@@ -112,7 +117,11 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                             type_name: p.type_name.clone(),
                             visibility: Visibility::Private,
                             span: p.span,
-                            detail: SymbolDetail::None,
+                            detail: SymbolDetail::Parameter {
+                                type_name: p.type_name.clone(),
+                                passing: p.passing.clone(),
+                                is_optional: p.is_optional,
+                            },
                             proc_scope: Some(proc.name.clone()),
                         });
                     }

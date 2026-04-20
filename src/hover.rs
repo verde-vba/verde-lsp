@@ -3,6 +3,7 @@ use tower_lsp::lsp_types::*;
 use crate::analysis::resolve;
 use crate::analysis::symbols::{ParameterInfo, Symbol, SymbolDetail, SymbolKind};
 use crate::analysis::AnalysisHost;
+use crate::parser::ast::ParameterPassing;
 use crate::parser::ast::ProcedureKind;
 
 pub fn hover(host: &AnalysisHost, uri: &Url, position: Position) -> Option<Hover> {
@@ -71,6 +72,22 @@ fn symbol_to_hover(sym: &Symbol) -> Hover {
                 .map(|t| format!(" As {}", t))
                 .unwrap_or_default();
             format!("{} {}({}){}", kind_str, sym.name, param_list, ret)
+        }
+        SymbolDetail::Parameter {
+            type_name,
+            passing,
+            is_optional,
+        } => {
+            let prefix = match passing {
+                ParameterPassing::ByVal => "ByVal ",
+                ParameterPassing::ByRef => "ByRef ",
+            };
+            let opt = if *is_optional { "Optional " } else { "" };
+            let type_str = type_name
+                .as_ref()
+                .map(|t| format!(" As {}", t))
+                .unwrap_or_default();
+            format!("{}{}{}{}", opt, prefix, sym.name, type_str)
         }
         SymbolDetail::Variable { .. } => {
             let type_str = sym
