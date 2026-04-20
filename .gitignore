@@ -1,2 +1,4 @@
 /target
 /tests/fixtures/external/
+# Verde 全体設計書 — verde-lsp スコープ外。verde 本体 repo か Wiki で管理する。
+PLANS.md
