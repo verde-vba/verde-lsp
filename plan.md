@@ -1,16 +1,15 @@
 # verde-lsp バックログ
 
 > 最終更新: 2026-04-20  
-> 現在ブランチ: main (最新: 1e7bc30)  
-> テスト基準: 53 green, cargo clippy -D warnings 0 件
+> 現在ブランチ: main (最新: d933f8a)  
+> テスト基準: 56 green, cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+3)
+## 次 Sprint 推奨 (Sprint N+5)
 
-**PBI-05 (While/Do/ReDim StatementNode 化) を推奨**  
-PBI-01, PBI-04 の完了で LSP の主要ナビ機能（hover/completion/definition）はカバー済み。  
-次は診断精度向上: `ReDim arr(n)` 等で Option Explicit が n を正しく undeclared として検出できるようにする。
+**PBI-05 の残り (Do / ReDim) を継続推奨**  
+While の StatementNode 化が完了。Do While/Do Until/Do Loop と ReDim が同パターンで実装できる。
 
 ---
 
@@ -64,17 +63,25 @@ PBI-01, PBI-04 の完了で LSP の主要ナビ機能（hover/completion/definit
 
 ---
 
-### PBI-05 — While / Do / ReDim を StatementNode variant に追加する
+### PBI-05b — Do / ReDim を StatementNode variant に追加する (残り)
 
 | 項目 | 内容 |
 |------|------|
-| **目的** | VBA の `While cond`, `Do While cond`, `ReDim arr(n)` が現状 Expression や未分類として扱われ、診断・hover・completion で正しく処理されない。If/For と同様のパターンで variant 化し diagnostics arm を追加する。 |
-| **受入基準** | (1) `ReDim arr(undeclaredSize)` で undeclaredSize が Option Explicit 警告を発する。(2) `While undeclaredCond` も同様。(3) cargo test 36+ green, clippy 0 |
-| **見積サイズ** | M (parser/ast.rs + parser/parse.rs に variant 追加 → diagnostics.rs に arm 追加 → テスト追加) |
-| **依存** | なし。ただし前 sprint の If/For パターンを踏襲するため実装コストは低い |
-| **調査メモ** | `src/parser/parse.rs` の `classify_and_parse_statement` ルータに While/Do/ReDim のエントリを追加する必要あり。`lexer::Token` に対応キーワードがあるか要確認 |
+| **目的** | `Do While cond` / `Do Until cond` / `ReDim arr(n)` が現状 Expression として扱われ、Option Explicit 診断で条件式の undeclared 識別子を正しく検出できない可能性がある。While と同パターンで variant 化する。 |
+| **受入基準** | (1) `ReDim arr(undeclaredSize)` で undeclaredSize が Option Explicit 警告を発する。(2) `Do While undeclaredCond` も同様。(3) cargo test green, clippy 0 |
+| **見積サイズ** | S×2 (While 実装の完全な対称) |
+| **依存** | PBI-05 (While) 完了済み |
+| **調査メモ** | `Token::Do` / `Token::ReDim` が lexer に存在確認済み。ReDim は `LocalDeclarationNode` 経由なので診断はすでに動く可能性あり — 実装前に probe テストで確認すること |
 
 ---
+
+## 完了済み (Sprint N+4)
+
+| コミット | 内容 |
+|----------|------|
+| `daa1508` | refactor: WhileStatementNode + StatementNode::While 追加 (Tidy First) |
+| `e32c5ae` | feat: PBI-05 (While) — WhileStatementNode パース + Option Explicit 診断対応 |
+| `d933f8a` | refactor: classify_and_parse_statement doc comment 更新 |
 
 ## 完了済み (Sprint N+3)
 
