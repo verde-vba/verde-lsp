@@ -1,8 +1,56 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+31 完了)
+> 最終更新: 2026-04-21 (Sprint N+32 完了)
 > 現在ブランチ: main
 > テスト基準: 104 green (lib 42 + integration 62), cargo clippy -D warnings 0 件
+
+---
+
+## Sprint N+32 (2026-04-21)
+
+### Sprint Goal
+PBI-30b: `SymbolDetail::EnumMember.value` を `Option<i64>` → `i64` に型変更し、「enum member は常に implicit/explicit value を持つ」という PBI-29 以降の不変量を型で表現する（Tidy First, behavior 変更なし）。
+
+### Path Chosen
+構造変更のみの 1 commit:
+- `SymbolDetail::EnumMember.value: Option<i64>` → `i64`
+- `build_symbol_table` の EnumDef ブランチで `resolved` を `Some(...)` で wrap していた箇所を unwrap（`Some(*v) → *v` / `Some(implicit) → implicit`）
+- `hover.rs` の `match value { Some(v) => ..., None => ... }` を単一 format に置換（dead な None ブランチを削除）
+- テストの `assert_eq!(*value, Some(N))` を `assert_eq!(*value, N)` へ変更
+
+### Scope
+- `src/analysis/symbols.rs`: SymbolDetail 定義 + build_symbol_table の resolved 計算 + テスト 4 件のアサーション
+- `src/hover.rs`: EnumMember レンダリングの match を単一 format に縮約
+
+### Acceptance Criteria
+1. `SymbolDetail::EnumMember.value` の型が `i64` である
+2. hover の `None` ブランチが削除されている
+3. cargo test 104 green 維持（PBI 増分なし、型変更は挙動保存）
+4. cargo clippy -D warnings 0 件, cargo fmt --check pass
+
+### Result
+104 green 維持 / clippy 0 件 / fmt pass。差分は `src/analysis/symbols.rs` +8/-13, `src/hover.rs` +3/-4 の計 21 行削減。hover の match は 4 行 → 3 行の一重 format へ。
+
+---
+
+## Sprint N+32 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-30b `SymbolDetail::EnumMember.value` の型変更」を完全達成。Sprint N+31 retrospective の Try 項目を消化。Tidy First の原則通り構造変更のみで 1 commit。
+
+### KPT
+
+#### Keep
+- PBI-29 で不変量（全メンバに value が割り当てられる）を確立してから 1 Sprint 空けて型に反映する、2 段階の設計進化。挙動変更と型変更を分離することで「どちらの変更が regression を起こしたか」が切り分けやすい。
+- `Some(v) → *v` / `Some(implicit) → implicit` のように `Option` wrapping のみを剥がす差分は機械的で、レビュー時に「挙動変更の混入」を疑う必要がない。
+- hover.rs の `None` ブランチは PBI-29 時点で dead code と認識しつつ「コード上は問題なし」として残していた。1 Sprint 待って型変更と同時に削除したことで、dead code の存在期間を最小化しつつ同一トピックの変更をまとめられた。
+
+#### Problem
+- `SymbolDetail::EnumDef { members: Vec<(SmolStr, Option<i64>)> }` の `Option<i64>` は依然として parser の raw 出力（explicit value の有無）を表す。`EnumMember.value` と概念が異なる（before resolution vs after resolution）が、型としては両方に `Option` が登場して紛らわしい。
+
+#### Try
+- `EnumDef.members` 側の型を `Vec<EnumMemberRaw { name, explicit_value: Option<i64> }>` のような named struct に寄せるか検討。今の tuple + Option の意味論的曖昧さは YAGNI で残す選択もある（PBI-31 候補、優先度低）。
 
 ---
 
@@ -518,6 +566,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-27 | Enum value parsing 対応 — integer literal 右辺を i64 として格納 | XS | **Done** |
 | PBI-28 | Enum member value で負数・16 進 literal 対応 | XS | **Done** |
 | PBI-29 | Enum member implicit value 計算（前メンバ + 1） | XS | **Done** |
+| PBI-30b | SymbolDetail::EnumMember.value を Option<i64> → i64（Tidy First 型変更） | XS | **Done** |
 
 ---
 
