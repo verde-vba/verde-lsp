@@ -96,6 +96,28 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                         return_type: proc.return_type.clone(),
                     },
                 });
+                for &stmt_id in &proc.body {
+                    if let AstNode::Statement(StatementNode::LocalDeclaration(decl)) =
+                        &ast.nodes[stmt_id]
+                    {
+                        let is_const = decl.kind == DeclKind::Const;
+                        let is_static = decl.kind == DeclKind::Static;
+                        for (name, type_name) in &decl.names {
+                            symbols.push(Symbol {
+                                name: name.clone(),
+                                kind: if is_const {
+                                    SymbolKind::Constant
+                                } else {
+                                    SymbolKind::Variable
+                                },
+                                type_name: type_name.clone(),
+                                visibility: Visibility::Private,
+                                span: decl.span,
+                                detail: SymbolDetail::Variable { is_static },
+                            });
+                        }
+                    }
+                }
             }
             AstNode::Variable(var) => {
                 let kind = if var.is_const {
@@ -156,5 +178,22 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
     SymbolTable {
         symbols,
         option_explicit: ast.option_explicit,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::parse;
+
+    #[test]
+    fn build_symbol_table_registers_local_dim_variable() {
+        let result = parse("Sub Foo()\n    Dim x As String\nEnd Sub\n");
+        let symbols = build_symbol_table(&result.ast);
+        let sym = symbols.symbols.iter().find(|s| s.name.as_str() == "x");
+        assert!(sym.is_some(), "expected local 'x' in symbol table");
+        let sym = sym.unwrap();
+        assert_eq!(sym.type_name.as_deref(), Some("String"));
+        assert!(matches!(sym.kind, SymbolKind::Variable));
     }
 }
