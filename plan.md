@@ -1,25 +1,14 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+16 完了)
+> 最終更新: 2026-04-21 (Sprint N+17 完了)
 > 現在ブランチ: main
-> テスト基準: 75 green (lib 36 + integration 39), cargo clippy -D warnings 0 件
+> テスト基準: 77 green (lib 36 + integration 41), cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+17)
+## 次 Sprint 推奨 (Sprint N+18)
 
-**Sprint Goal**: PBI-15 を完遂し、textDocument/references を提供する
-
-### PBI-15 — textDocument/references プロバイダ実装 (XS) ✅ Ready
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | カーソル下のシンボルの全参照箇所を返す `textDocument/references` を実装する。 |
-| **背景** | `find_word_at_position` + `find_all_word_occurrences` は既存。rename がこれらを使う設計をそのまま転用できる。 |
-| **実装方針** | `src/references.rs` に `pub fn find_references(host, uri, position) -> Vec<Location>` を追加。server.rs で `references_provider: Some(true)` と `references` ハンドラを追加。MVP は単一ファイル内の全 occurrence を返す。 |
-| **受入基準** | (1) 2 回使われるシンボルに対して 2 件の Location が返る。(2) 77+ green, clippy 0。 |
-| **見積サイズ** | XS |
-| **依存** | なし |
+**Sprint Goal 候補**: 新規 PBI を Refinement 後に実行
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -69,6 +58,36 @@
 
 #### Try
 - `check_option_explicit` の引数が 5 個を超えた時点で `DiagnosticsContext` 構造体を導入する。
+
+---
+
+## Sprint N+17 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-15 textDocument/references プロバイダ実装」を完全達成。
+
+### KPT
+
+#### Keep
+- `rename.rs` のパターン (word → occurrences → lsp_range) をそのまま `references.rs` に転用し 20 行以内で完結。XS 見積が正確だった。
+- `unwrap_or_default()` で `with_source` の `None` を空 Vec で処理するイディオムが clean。
+
+#### Problem
+- `find_references` はシングルファイルのみ。クロスファイル references は `all_public_symbols_from_other_files` の拡張として将来対応可能だが、現時点では MVP 範囲。
+
+#### Try
+- PBI-16 としてクロスファイル references を Small で追加検討する。
+
+---
+
+## 完了済み (Sprint N+17)
+
+| コミット | 内容 |
+|----------|------|
+| `e0ea5be` | docs(scrum): PBI-15 Refinement |
+| `fa49c44` | test: textDocument/references RED テスト (PBI-15) |
+| `b200b2f` | feat: textDocument/references プロバイダ実装 (PBI-15) |
 
 ---
 
@@ -337,7 +356,7 @@
 | PBI-11 | workbook-context.json シート名補完 | M | **Done** |
 | PBI-13 | workbook-context.json tables/named_ranges 補完拡張 | XS | **Done** |
 | PBI-14 | workbook-context.json 自動再読み込み (didChangeWatchedFiles) | S | **Done** |
-| PBI-15 | textDocument/references プロバイダ実装 | XS | **Ready** |
+| PBI-15 | textDocument/references プロバイダ実装 | XS | **Done** |
 | PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
