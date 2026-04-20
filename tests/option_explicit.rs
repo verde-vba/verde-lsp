@@ -38,3 +38,26 @@ fn warns_on_undeclared_variable_when_option_explicit_is_set() {
         diag.message
     );
 }
+
+#[test]
+fn does_not_warn_for_member_access_rhs_identifiers() {
+    let source = "Option Explicit\n\nSub Main()\n    Dim ws As Worksheet\n    ws.Range(\"A1\").Value = 10\nEnd Sub\n";
+    let uri: Url = "file:///test.bas".parse().unwrap();
+
+    let host = AnalysisHost::new();
+    let parse_result = parser::parse(source);
+    host.update(uri.clone(), source.to_string(), parse_result);
+
+    let diagnostics = host.diagnostics(&uri);
+
+    assert!(
+        diagnostics.is_empty(),
+        "expected zero diagnostics for member access on declared variable, got {}: [{}]",
+        diagnostics.len(),
+        diagnostics
+            .iter()
+            .map(|d| format!("{:?}: {}", d.severity, d.message))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+}

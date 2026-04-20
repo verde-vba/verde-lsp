@@ -110,17 +110,104 @@ pub fn check_option_explicit(
     let tokens = lexer::lex(source);
     let mut diagnostics = Vec::new();
 
+    // Token-context state machine:
+    // - `prev_token` is the previous non-trivia token (trivia = Newline/Comment).
+    //   Used to detect `.Ident` (member access RHS) and `As Ident` (type position).
+    // - `in_decl_list` is true when we're inside a Dim/Static/Private/Public/
+    //   Const/ReDim list, until the statement ends (Newline) or we hit `As`
+    //   (after which the next identifier is a type, not a declared name).
+    // - Declared local names from Dim/etc. LHS are accumulated into
+    //   `local_declared` and added to the "is declared" set for the remainder
+    //   of the scan.
+    let mut prev_token: Option<Token> = None;
+    let mut in_decl_list = false;
+    // After `As` we expect a type identifier next, even if we were inside a
+    // Dim list; after that identifier, control returns to the Dim list only if
+    // a comma follows.
+    let mut expecting_type = false;
+    let mut local_declared: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+
     for spanned in &tokens {
+        // Update decl-list state BEFORE handling identifiers so the keyword
+        // that starts a decl list flips the flag in time for the next ident.
+        match spanned.token {
+            Token::Dim | Token::Static | Token::Const | Token::ReDim => {
+                in_decl_list = true;
+                expecting_type = false;
+            }
+            Token::Private | Token::Public => {
+                // These can start decl lists at module level or qualify
+                // procedures. Treat conservatively: enable decl list; it gets
+                // cleared on Newline if it was a procedure decl (Sub/Function
+                // lives on the signature line, whose identifiers are already
+                // skipped via signature_spans).
+                in_decl_list = true;
+                expecting_type = false;
+            }
+            Token::As => {
+                expecting_type = true;
+            }
+            Token::Comma => {
+                // Inside a Dim list, a comma means another declared name
+                // follows. Clear "expecting_type" so we treat the next ident
+                // as a declaration name again.
+                if in_decl_list {
+                    expecting_type = false;
+                }
+            }
+            Token::Newline | Token::Colon => {
+                in_decl_list = false;
+                expecting_type = false;
+            }
+            _ => {}
+        }
+
         if spanned.token != Token::Identifier {
+            // Track previous non-trivia token for lookback on the next ident.
+            if !matches!(spanned.token, Token::Comment) {
+                prev_token = Some(spanned.token.clone());
+            }
             continue;
         }
         let offset = spanned.span.start;
+        let lower = spanned.text.to_ascii_lowercase();
+
+        // Context-based suppression for this identifier.
+        let after_dot = matches!(prev_token, Some(Token::Dot));
+        let after_as = matches!(prev_token, Some(Token::As));
+
+        // If we're inside a Dim-style decl list and NOT in a type position,
+        // this identifier is a declared name: record it and skip warning.
+        if in_decl_list && !expecting_type && !after_dot {
+            local_declared.insert(lower.clone());
+            prev_token = Some(Token::Identifier);
+            continue;
+        }
+
+        // After `.`, skip entirely — it's a member access RHS.
+        if after_dot {
+            prev_token = Some(Token::Identifier);
+            continue;
+        }
+
+        // After `As`, this identifier is a type reference. Skip it
+        // (covers user-defined types, which the symbol table may or may not
+        // contain; being conservative here).
+        if after_as {
+            // Clear expecting_type once the type ident is consumed.
+            expecting_type = false;
+            prev_token = Some(Token::Identifier);
+            continue;
+        }
+
+        prev_token = Some(Token::Identifier);
 
         if in_any_span(offset, &skip_spans) || in_any_span(offset, &signature_spans) {
             continue;
         }
 
-        if declared.contains(&spanned.text.to_ascii_lowercase()) {
+        if declared.contains(&lower) || local_declared.contains(&lower) {
             continue;
         }
 
