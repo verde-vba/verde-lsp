@@ -38,6 +38,7 @@ impl VbaLanguageServer {
 
 fn server_capabilities() -> ServerCapabilities {
     ServerCapabilities {
+        position_encoding: Some(PositionEncodingKind::UTF16),
         text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
         completion_provider: Some(CompletionOptions {
             trigger_characters: Some(vec![".".to_string()]),
