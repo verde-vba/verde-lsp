@@ -222,4 +222,20 @@ mod tests {
         assert_eq!(sym.type_name.as_deref(), Some("String"));
         assert!(matches!(sym.kind, SymbolKind::Variable));
     }
+
+    #[test]
+    fn parameter_symbol_has_parameter_detail() {
+        let result = parse("Sub Foo(x As Integer)\nEnd Sub\n");
+        let symbols = build_symbol_table(&result.ast);
+        let sym = symbols
+            .symbols
+            .iter()
+            .find(|s| s.name.as_str() == "x" && matches!(s.kind, SymbolKind::Parameter))
+            .expect("expected parameter 'x' in symbol table");
+        assert!(
+            matches!(sym.detail, SymbolDetail::Parameter { .. }),
+            "expected SymbolDetail::Parameter, got {:?}",
+            sym.detail
+        );
+    }
 }
