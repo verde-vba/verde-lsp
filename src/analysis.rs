@@ -66,4 +66,23 @@ impl AnalysisHost {
     pub fn symbol_table(&self, uri: &Url) -> Option<SymbolTable> {
         self.files.get(uri).map(|f| f.symbols.clone())
     }
+
+    /// Returns all Public, module-level symbols from every file EXCEPT `current_uri`.
+    /// Used for cross-module completion.
+    pub fn all_public_symbols_from_other_files(&self, current_uri: &Url) -> Vec<symbols::Symbol> {
+        let mut result = Vec::new();
+        for entry in self.files.iter() {
+            if entry.key() == current_uri {
+                continue;
+            }
+            for sym in &entry.symbols.symbols {
+                if sym.visibility == crate::parser::ast::Visibility::Public
+                    && sym.proc_scope.is_none()
+                {
+                    result.push(sym.clone());
+                }
+            }
+        }
+        result
+    }
 }

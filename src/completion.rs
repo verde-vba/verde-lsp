@@ -62,6 +62,27 @@ pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<Compl
         items.extend(sym_items);
     }
 
+    // Public symbols from other files in the workspace (cross-module completion)
+    for sym in host.all_public_symbols_from_other_files(uri) {
+        let kind = match sym.kind {
+            SymbolKind::Procedure => CompletionItemKind::METHOD,
+            SymbolKind::Function => CompletionItemKind::FUNCTION,
+            SymbolKind::Property => CompletionItemKind::PROPERTY,
+            SymbolKind::Variable => CompletionItemKind::VARIABLE,
+            SymbolKind::Constant => CompletionItemKind::CONSTANT,
+            SymbolKind::Parameter => CompletionItemKind::VARIABLE,
+            SymbolKind::TypeDef => CompletionItemKind::STRUCT,
+            SymbolKind::EnumDef => CompletionItemKind::ENUM,
+            SymbolKind::EnumMember => CompletionItemKind::ENUM_MEMBER,
+        };
+        items.push(CompletionItem {
+            label: sym.name.to_string(),
+            kind: Some(kind),
+            detail: sym.type_name.as_ref().map(|t| t.to_string()),
+            ..Default::default()
+        });
+    }
+
     items
 }
 
