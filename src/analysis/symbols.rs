@@ -335,12 +335,14 @@ mod tests {
             .expect("expected enum member 'Ten' in symbol table");
         match &sym.detail {
             SymbolDetail::EnumMember { value, .. } => {
-                assert_eq!(*value, Some(16), "expected Ten = &H10 (= 16), got {:?}", value);
+                assert_eq!(
+                    *value,
+                    Some(16),
+                    "expected Ten = &H10 (= 16), got {:?}",
+                    value
+                );
             }
-            other => panic!(
-                "expected SymbolDetail::EnumMember for Ten, got {:?}",
-                other
-            ),
+            other => panic!("expected SymbolDetail::EnumMember for Ten, got {:?}", other),
         }
     }
 }
