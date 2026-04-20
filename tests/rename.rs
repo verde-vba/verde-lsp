@@ -149,6 +149,69 @@ fn rename_private_sub_stays_in_single_file() {
 }
 
 #[test]
+fn rename_local_var_stays_within_its_own_procedure() {
+    // Single file with two Sub procs both declaring a local "x".
+    // Renaming "x" in Sub Foo must NOT affect "x" in Sub Bar.
+    //
+    // Sub Foo()             <- line 0
+    //     Dim x As Integer  <- line 1, 'x' at col 8
+    //     x = 1             <- line 2, 'x' at col 4
+    // End Sub               <- line 3
+    // Sub Bar()             <- line 4
+    //     Dim x As String   <- line 5
+    //     x = 2             <- line 6
+    // End Sub               <- line 7
+    let source = "Sub Foo()\n    Dim x As Integer\n    x = 1\nEnd Sub\nSub Bar()\n    Dim x As String\n    x = 2\nEnd Sub\n";
+    let position = Position::new(1, 8); // 'x' in Foo's Dim declaration
+
+    let edit = do_rename(source, position, "myVar").expect("expected WorkspaceEdit");
+    let changes = edit.changes.unwrap();
+    let uri: Url = "file:///test.bas".parse().unwrap();
+    let edits = changes.get(&uri).expect("expected edits for file URI");
+
+    assert_eq!(
+        edits.len(),
+        2,
+        "expected 2 renames (Foo's x only: decl + use), got {} — Bar's x must NOT be renamed",
+        edits.len()
+    );
+    for e in edits {
+        assert!(
+            e.range.start.line < 4,
+            "rename must stay within Sub Foo (lines 0-3), found edit at line {}",
+            e.range.start.line
+        );
+    }
+}
+
+#[test]
+fn rename_from_use_site_stays_within_its_procedure() {
+    // Same two-procedure source: cursor is on the *use site* of x inside Foo (not the Dim).
+    // The rename must still be constrained to Sub Foo.
+    let source = "Sub Foo()\n    Dim x As Integer\n    x = 1\nEnd Sub\nSub Bar()\n    Dim x As String\n    x = 2\nEnd Sub\n";
+    let position = Position::new(2, 4); // 'x' in "    x = 1" (use site in Foo)
+
+    let edit = do_rename(source, position, "myVar").expect("expected WorkspaceEdit");
+    let changes = edit.changes.unwrap();
+    let uri: Url = "file:///test.bas".parse().unwrap();
+    let edits = changes.get(&uri).expect("expected edits for file URI");
+
+    assert_eq!(
+        edits.len(),
+        2,
+        "expected 2 renames (Foo's x: decl + use site), got {} — Bar's x must NOT be renamed",
+        edits.len()
+    );
+    for e in edits {
+        assert!(
+            e.range.start.line < 4,
+            "rename must stay within Sub Foo (lines 0-3), found edit at line {}",
+            e.range.start.line
+        );
+    }
+}
+
+#[test]
 fn rename_local_variable_stays_in_single_file() {
     // "Sub Foo()\n    Dim x As Integer\n    x = 1\nEnd Sub\n"
     // line 1: "    Dim x As Integer"
