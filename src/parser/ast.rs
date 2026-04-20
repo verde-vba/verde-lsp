@@ -48,6 +48,12 @@ pub struct ProcedureNode {
     pub return_type: Option<SmolStr>,
     pub body: Vec<NodeId>,
     pub span: TextRange,
+    /// Byte span covering just the procedure body — from the character after
+    /// the signature's terminating newline up to (but not including) the
+    /// `End Sub`/`End Function`/`End Property` token. Consumers can slice
+    /// `&source[body_range.start..body_range.end]` to scan body-only content
+    /// without re-seeing the signature or surrounding module.
+    pub body_range: TextRange,
 }
 
 #[derive(Debug, Clone, PartialEq)]

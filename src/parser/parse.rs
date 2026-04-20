@@ -164,9 +164,18 @@ impl<'a> Parser<'a> {
             }
         };
 
+        // Determine the byte offset where the body starts — just past the
+        // first Newline after the signature. If the end-of-procedure token
+        // appears before any newline, the body is empty and starts at the
+        // End token's position.
+        let mut body_start: Option<usize> = None;
+
         while self.pos < self.tokens.len() {
-            if self.tokens[self.pos].token == end_token {
-                let end = self.tokens[self.pos].span.end;
+            let tok = &self.tokens[self.pos];
+            if tok.token == end_token {
+                let body_end = tok.span.start;
+                let body_start = body_start.unwrap_or(body_end);
+                let end = tok.span.end;
                 self.pos += 1;
 
                 let node = AstNode::Procedure(ProcedureNode {
@@ -177,10 +186,17 @@ impl<'a> Parser<'a> {
                     return_type: None,
                     body: Vec::new(),
                     span: TextRange::new(start, end),
+                    body_range: TextRange::new(body_start, body_end),
                 });
                 let id = self.ast.nodes.alloc(node);
                 self.ast.root.push(id);
                 return;
+            }
+            if body_start.is_none() && tok.token == Token::Newline {
+                // Body begins immediately after the signature-terminating
+                // newline. Subsequent newlines inside the body keep
+                // `body_start` fixed at this first position.
+                body_start = Some(tok.span.end);
             }
             self.pos += 1;
         }
