@@ -790,7 +790,7 @@ mod tests {
             .expect("expected a procedure")
     }
 
-    fn parameter<'a>(ast: &'a Ast, id: NodeId) -> &'a ParameterNode {
+    fn parameter(ast: &Ast, id: NodeId) -> &ParameterNode {
         match &ast.nodes[id] {
             AstNode::Parameter(p) => p,
             other => panic!("expected Parameter node, got {:?}", other),

@@ -18,6 +18,12 @@ pub struct FileAnalysis {
     pub source: String,
 }
 
+impl Default for AnalysisHost {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AnalysisHost {
     pub fn new() -> Self {
         Self {
