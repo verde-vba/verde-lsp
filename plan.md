@@ -1,8 +1,58 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+29 完了)
+> 最終更新: 2026-04-21 (Sprint N+30 完了)
 > 現在ブランチ: main
-> テスト基準: 101 green (lib 39 + integration 62), cargo clippy -D warnings 0 件
+> テスト基準: 103 green (lib 41 + integration 62), cargo clippy -D warnings 0 件
+
+---
+
+## Sprint N+30 (2026-04-21)
+
+### Sprint Goal
+PBI-28: Enum member value で負数と 16 進 literal を parser で解釈 — `Red = -1` と `Ten = &H10` を `SymbolDetail::EnumMember.value` に `Some(-1)` / `Some(16)` として格納する。Sprint N+29 retrospective の Try 項目を消化する follow-up。
+
+### Path Chosen
+Option (A) — `try_parse_enum_member_value` helper の `Eq` 消費後の処理を `match self.peek()?.token` に差し替え、3 branch で分岐:
+- `NumberLiteral` (既存): decimal を `i64::parse` で読む
+- `Minus`: 2-token lookahead で次の `NumberLiteral` を parse し negate
+- `HexLiteral`: トークン text から `&H`/`&h` prefix と末尾 optional `&` suffix を除去し `i64::from_str_radix(.., 16)` で読む
+
+lexer には変更なし (`Token::Minus`, `Token::HexLiteral` は既に定義済み)。
+
+### Scope
+- `src/parser/parse.rs` の `try_parse_enum_member_value` helper 拡張 (GREEN)
+- `src/analysis/symbols.rs` の tests に 2 テスト追加 (RED→GREEN)
+  - `enum_member_with_negative_value_captures_negative_integer`
+  - `enum_member_with_hex_literal_captures_integer_value`
+
+### Acceptance Criteria
+1. `Enum Sign\n    Minus = -1\nEnd Enum` を parse すると Minus.value == Some(-1)
+2. `Enum Flags\n    Ten = &H10\nEnd Enum` を parse すると Ten.value == Some(16)
+3. 既存 enum_member テスト (PBI-26/27) は回帰なし
+4. cargo test 101 → 103 green, clippy -D warnings 0 件, cargo fmt --check pass
+
+---
+
+## Sprint N+30 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-28 enum member 負数・16 進対応」を完全達成。Sprint N+29 retrospective で記録した Try 項目を消化。
+
+### KPT
+
+#### Keep
+- `try_parse_enum_member_value` を `match self.peek()?.token` ベースに書き換えたことで、3 branch が平坦に並び分岐が視認しやすくなった。if ネストが深まらず、将来 octal や identifier 参照を足す際の編集点が明確。
+- Red フェーズで `Some(-1)` と `Some(16)` の 2 ケースを同時に追加したため、Green の段階で両方を同じ構造 (branch 追加) で通せた。TDD の「小さく 1 件ずつ」原則を崩した判断だったが、密接に関連する拡張ではペアで扱った方が設計判断が 1 回で済む。
+- HexLiteral の lexer regex 末尾 `&?` (VBA の `&H10&` Long suffix) を helper の `strip_suffix('&')` で吸収。lexer 知識を parser で補正する、薄い既知の汚れ吸収パターン。
+
+#### Problem
+- implicit value 計算 (VBA 仕様では explicit value を持たないメンバは前メンバ + 1) は未対応。`Enum X\n A\n B = 5\n C\nEnd Enum` で A=Some(0), C=Some(6) にならず C=None になる。
+- octal (`&O17`) と float を parse するかは現時点で未決定。Enum で float は実用的に稀。
+
+#### Try
+- PBI-29 候補: implicit value 計算。parser か build_symbol_table どちらで担当するか判断必要 (SmolStr のまま i64 計算を注入するには後者が清潔かもしれない)。
+- octal 対応は need 発生後に対応 (YAGNI)。
 
 ---
 
@@ -424,6 +474,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-25 | SymbolDetail::Parameter 追加 — パラメータ登録の設計改善 | XS | **Done** |
 | PBI-26 | SymbolDetail::None 完全廃止 — EnumMember バリアント追加 | XS | **Done** |
 | PBI-27 | Enum value parsing 対応 — integer literal 右辺を i64 として格納 | XS | **Done** |
+| PBI-28 | Enum member value で負数・16 進 literal 対応 | XS | **Done** |
 
 ---
 
