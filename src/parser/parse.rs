@@ -193,7 +193,7 @@ impl<'a> Parser<'a> {
         // type; a missing `As` in a legacy Function is tolerated (stays None).
         // A `_` line continuation may sit between `)` and `As`, so we peek
         // across continuations — but must not consume the signature-terminating
-        // Newline that the body_start scan below relies on.
+        // Newline that the signature-advancing scan below relies on.
         let return_type = match kind {
             ProcedureKind::Function | ProcedureKind::PropertyGet => {
                 self.skip_line_continuations_preserving_newline();
@@ -217,12 +217,6 @@ impl<'a> Parser<'a> {
             | ProcedureKind::PropertySet => Token::EndProperty,
         };
 
-        // Determine the byte offset where the body starts — just past the
-        // first Newline after the signature. If the end-of-procedure token
-        // appears before any newline, the body is empty and starts at the
-        // End token's position.
-        let mut body_start: Option<usize> = None;
-
         // Advance past the signature line so the body loop does not re-see
         // signature tokens. We look for either the signature-terminating
         // Newline or the `end_token` itself (single-line procedures are not
@@ -233,7 +227,6 @@ impl<'a> Parser<'a> {
                 break;
             }
             if tok.token == Token::Newline {
-                body_start = Some(tok.span.end);
                 self.pos += 1;
                 break;
             }
@@ -248,8 +241,6 @@ impl<'a> Parser<'a> {
             match self.peek() {
                 None => break,
                 Some(t) if t.token == end_token => {
-                    let body_end = t.span.start;
-                    let body_start = body_start.unwrap_or(body_end);
                     let end = t.span.end;
                     self.pos += 1;
 
@@ -261,7 +252,6 @@ impl<'a> Parser<'a> {
                         return_type,
                         body,
                         span: TextRange::new(start, end),
-                        body_range: TextRange::new(body_start, body_end),
                     });
                     let id = self.ast.nodes.alloc(node);
                     self.ast.root.push(id);
@@ -849,37 +839,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn parse_procedure_records_body_range() {
-        let source = "Sub Foo()\n    x = 1\nEnd Sub\n";
-        let result = parse(source);
-        let proc = first_procedure(&result.ast);
-        let body = &source[proc.body_range.start as usize..proc.body_range.end as usize];
-        assert!(
-            body.starts_with("    x = 1"),
-            "expected body to start with the body line, got {:?}",
-            body
-        );
-        let end_idx = source.find("End Sub").expect("End Sub must exist");
-        assert_eq!(
-            proc.body_range.end as usize, end_idx,
-            "body_range.end should point at the start of End Sub"
-        );
-    }
-
-    #[test]
-    fn parse_procedure_body_range_is_empty_when_no_body() {
-        let source = "Sub Foo()\nEnd Sub\n";
-        let result = parse(source);
-        let proc = first_procedure(&result.ast);
-        let body = &source[proc.body_range.start as usize..proc.body_range.end as usize];
-        assert!(
-            body.trim().is_empty(),
-            "expected empty/whitespace-only body, got {:?}",
-            body
-        );
-    }
-
     fn statement(ast: &Ast, id: NodeId) -> &StatementNode {
         match &ast.nodes[id] {
             AstNode::Statement(s) => s,
@@ -1141,24 +1100,6 @@ mod tests {
             proc.return_type.as_ref().map(|s| s.as_str()),
             Some("String"),
             "expected return type captured across line continuation"
-        );
-    }
-
-    #[test]
-    fn parse_procedure_body_range_excludes_signature() {
-        let source = "Sub Foo(x As Long)\n    y = x\nEnd Sub\n";
-        let result = parse(source);
-        let proc = first_procedure(&result.ast);
-        let body = &source[proc.body_range.start as usize..proc.body_range.end as usize];
-        assert!(
-            !body.contains("Sub Foo"),
-            "body_range should not contain 'Sub Foo', got {:?}",
-            body
-        );
-        assert!(
-            !body.contains("x As Long"),
-            "body_range should not contain 'x As Long', got {:?}",
-            body
         );
     }
 
