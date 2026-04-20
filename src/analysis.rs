@@ -64,28 +64,22 @@ impl AnalysisHost {
         false
     }
 
-    pub fn workbook_sheets(&self) -> Vec<String> {
+    fn read_workbook_context(&self) -> std::sync::RwLockReadGuard<'_, WorkbookContext> {
         self.workbook_context
             .read()
-            .expect("workbook_context RwLock poisoned: prior panic in write context")
-            .sheets
-            .clone()
+            .expect("workbook_context RwLock poisoned")
+    }
+
+    pub fn workbook_sheets(&self) -> Vec<String> {
+        self.read_workbook_context().sheets.clone()
     }
 
     pub fn workbook_tables(&self) -> Vec<String> {
-        self.workbook_context
-            .read()
-            .expect("workbook_context RwLock poisoned: prior panic in write context")
-            .tables
-            .clone()
+        self.read_workbook_context().tables.clone()
     }
 
     pub fn workbook_named_ranges(&self) -> Vec<String> {
-        self.workbook_context
-            .read()
-            .expect("workbook_context RwLock poisoned: prior panic in write context")
-            .named_ranges
-            .clone()
+        self.read_workbook_context().named_ranges.clone()
     }
 
     pub fn update(&self, uri: Url, source: String, parse_result: ParseResult) {
