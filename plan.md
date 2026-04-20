@@ -1,6 +1,6 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+36 完了 — PBI-34 リリースバイナリ自動配布 workflow 追加)
+> 最終更新: 2026-04-21 (Sprint N+37 完了 — PBI-32b RwLock poison defensive hardening)
 > 現在ブランチ: main
 > テスト基準: 111 green (lib 47 + integration 64), cargo clippy -D warnings 0 件
 
@@ -77,6 +77,58 @@ parser 拡張を含むため工数大。Phase 1/2 で体験が整った後に着
 - Phase 0 の UTF-16 バグ (PBI-31) は**実害が出る前に**潰す。現状 BMP 日本語 (ひらがな/漢字) は偶然動くが、文字列リテラルの emoji 等で破綻
 - Class module (PBI-44) の優先度は Verde 利用プロジェクトに `.cls` がどれだけ含まれるかで変動 — 要データ収集
 - formatting (PBI-46) は「既存開発者」軸なら Phase 1 に繰り上げる余地あり
+
+---
+
+## Sprint N+37 (2026-04-21)
+
+### Sprint Goal
+PBI-32b: RwLock poison defensive hardening — `server.rs` / `analysis.rs` の `RwLock.unwrap()` 6 件を `.expect("... poisoned: ...")` に変換し、2 次 panic 時のメッセージを明確化する。Tidy First (構造変更のみ、挙動保存)。
+
+### Path Chosen
+Option B (`.expect()` コメント化) を選択。`tokio::sync::RwLock` への置換 (Option A) は `workbook_sheets()` 等の sync メソッドを async 化する必要があり XS を超える工数。現状 poison 到達経路はゼロのため defensive message を追加するのみで充分。
+
+### Scope
+- `src/server.rs`: `root_uri.write().unwrap()` → `.expect()` × 1、`root_uri.read().unwrap()` → `.expect()` × 1
+- `src/analysis.rs`: `workbook_context.write().unwrap()` → `.expect()` × 1、`workbook_context.read().unwrap()` → `.expect()` × 3
+
+### Acceptance Criteria
+1. `unwrap()` が RwLock 上で呼ばれる箇所が 0 件
+2. 111 green 維持、clippy -D warnings 0 件、fmt pass
+3. 挙動変化なし (poison 時の panic message のみ改善)
+
+### Result
+111 green / clippy 0 / fmt pass。`analysis.rs` +12/-4、`server.rs` +8/-2 の計 20 行差分。RwLock 上の `.unwrap()` が 6 → 0 件。
+
+---
+
+## Sprint N+37 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-32b RwLock poison defensive hardening」を完全達成。Phase 0 の全 PBI が Done になった。
+
+### KPT
+
+#### Keep
+- **XS の見積を守った**: Option B (`.expect()` コメント化) を選んだことで、sync → async 変換という追加工数を発生させずに目標を達成できた。YAGNI に従い最小変更で invariant を文書化
+- **Phase 0 クリーンアップの順序**: PBI-33 (CI) → PBI-34 (Release) → PBI-32b (Defensive) の順序が自然。CI 基盤が整った後に defensive コードを push できる状態で hardening することで、Windows CI で安全性確認まで完了
+
+#### Problem
+- `workbook_sheets()` / `workbook_tables()` / `workbook_named_ranges()` が 3 つとも同じ `.expect()` 文字列を持つ。ヘルパー `workbook_context_read()` を抽出すれば重複が消えるが、3 行 → 1 行のためオーバーエンジニアリングの可能性もある
+- `tokio::sync::RwLock` 置換 (Option A) を見送ったことで、`std::sync::RwLock` が async コンテキストで使われ続ける。Tokio ドキュメントによると sync RwLock を async コンテキストで使う場合は短時間の操作に限るべきとの指針がある
+
+#### Try
+- Phase 1 PBI-35 (signatureHelp) に着手。Phase 0 が完全に片付いたため、機能開発に集中できる
+- `workbook_context` 読み取りのヘルパー抽出を Tidy First として検討 (優先度低、3 箇所だけなので YAGNI)
+
+### Next Sprint Candidates
+
+| 優先度 | PBI | 理由 |
+|---|---|---|
+| 1 | PBI-35 | signatureHelp (M)。Phase 1 開始。既存 VBA 開発者の日常機能 |
+| 2 | PBI-36 | workspace/symbol (S)。Phase 1 続き |
+| 3 | PBI-37 | documentHighlight (XS)。Phase 1 クイックウィン |
 
 ---
 
@@ -883,7 +935,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-30b | SymbolDetail::EnumMember.value を Option<i64> → i64（Tidy First 型変更） | XS | **Done** |
 | PBI-31 | `position_to_offset` を UTF-16 対応 (LSP 準拠) | S | **Done (Sprint N+33)** |
 | ~~PBI-32~~ | ~~parser の `.expect()` 除去~~ | ~~XS~~ | **Cancel (Sprint N+34)** |
-| PBI-32b | `RwLock.unwrap()` poison 経路の tokio 化 / `expect` 明示化 | XS | Ready (Phase 0 / defensive) |
+| PBI-32b | `RwLock.unwrap()` poison 経路の tokio 化 / `expect` 明示化 | XS | **Done (Sprint N+37)** |
 | PBI-32c | `positionEncoding` capability negotiation | XS | Ready (Phase 0 / LSP 3.17) |
 | PBI-33 | Windows CI 追加 (`windows-latest` matrix) | S | **Done (Sprint N+35)** |
 | PBI-34 | リリースバイナリ自動配布 (tag → `verde-lsp.exe`) | S | **Done (Sprint N+36)** |

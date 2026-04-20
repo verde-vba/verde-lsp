@@ -60,7 +60,10 @@ impl LanguageServer for VbaLanguageServer {
         let root = params
             .root_uri
             .or_else(|| params.workspace_folders?.into_iter().next().map(|f| f.uri));
-        *self.root_uri.write().unwrap() = root;
+        *self
+            .root_uri
+            .write()
+            .expect("root_uri RwLock poisoned: prior panic in write context") = root;
 
         Ok(InitializeResult {
             capabilities: server_capabilities(),
@@ -70,7 +73,11 @@ impl LanguageServer for VbaLanguageServer {
 
     async fn initialized(&self, _: InitializedParams) {
         // Clone before awaiting to drop the RwLockReadGuard first.
-        let root = self.root_uri.read().unwrap().clone();
+        let root = self
+            .root_uri
+            .read()
+            .expect("root_uri RwLock poisoned: prior panic in write context")
+            .clone();
         if let Some(root) = root {
             if let Ok(base) = root.to_file_path() {
                 self.analysis

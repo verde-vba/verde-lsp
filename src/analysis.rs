@@ -46,7 +46,10 @@ impl AnalysisHost {
     }
 
     pub fn set_workbook_context(&self, ctx: WorkbookContext) {
-        *self.workbook_context.write().unwrap() = ctx;
+        *self
+            .workbook_context
+            .write()
+            .expect("workbook_context RwLock poisoned: prior panic in write context") = ctx;
     }
 
     /// Read `path`, parse as `WorkbookContext` JSON, and update the context.
@@ -62,15 +65,27 @@ impl AnalysisHost {
     }
 
     pub fn workbook_sheets(&self) -> Vec<String> {
-        self.workbook_context.read().unwrap().sheets.clone()
+        self.workbook_context
+            .read()
+            .expect("workbook_context RwLock poisoned: prior panic in write context")
+            .sheets
+            .clone()
     }
 
     pub fn workbook_tables(&self) -> Vec<String> {
-        self.workbook_context.read().unwrap().tables.clone()
+        self.workbook_context
+            .read()
+            .expect("workbook_context RwLock poisoned: prior panic in write context")
+            .tables
+            .clone()
     }
 
     pub fn workbook_named_ranges(&self) -> Vec<String> {
-        self.workbook_context.read().unwrap().named_ranges.clone()
+        self.workbook_context
+            .read()
+            .expect("workbook_context RwLock poisoned: prior panic in write context")
+            .named_ranges
+            .clone()
     }
 
     pub fn update(&self, uri: Url, source: String, parse_result: ParseResult) {
