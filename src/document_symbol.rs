@@ -100,5 +100,6 @@ fn to_lsp_symbol_kind(kind: &symbols::SymbolKind) -> SymbolKind {
         symbols::SymbolKind::TypeDef => lsp_types::SymbolKind::STRUCT,
         symbols::SymbolKind::EnumDef => lsp_types::SymbolKind::ENUM,
         symbols::SymbolKind::EnumMember => lsp_types::SymbolKind::ENUM_MEMBER,
+        symbols::SymbolKind::UdtMember => lsp_types::SymbolKind::FIELD,
     }
 }

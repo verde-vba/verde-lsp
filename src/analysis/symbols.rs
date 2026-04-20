@@ -33,6 +33,7 @@ pub enum SymbolKind {
     TypeDef,
     EnumDef,
     EnumMember,
+    UdtMember,
 }
 
 #[derive(Debug, Clone)]
@@ -59,6 +60,9 @@ pub enum SymbolDetail {
     EnumMember {
         parent_enum: SmolStr,
         value: i64,
+    },
+    UdtMember {
+        type_name: SmolStr,
     },
 }
 
@@ -179,10 +183,25 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                     visibility: td.visibility.clone(),
                     span: td.span,
                     detail: SymbolDetail::TypeDef {
-                        members: Vec::new(),
+                        members: td.members.clone(),
                     },
                     proc_scope: None,
                 });
+                for (member_name, member_type) in &td.members {
+                    symbols.push(Symbol {
+                        name: member_name.clone(),
+                        kind: SymbolKind::UdtMember,
+                        type_name: member_type.clone(),
+                        visibility: td.visibility.clone(),
+                        span: td.span,
+                        detail: SymbolDetail::UdtMember {
+                            type_name: member_type
+                                .clone()
+                                .unwrap_or_else(|| SmolStr::new("Variant")),
+                        },
+                        proc_scope: None,
+                    });
+                }
             }
             AstNode::EnumDef(ed) => {
                 symbols.push(Symbol {
@@ -238,6 +257,43 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
 mod tests {
     use super::*;
     use crate::parser::parse;
+
+    #[test]
+    fn type_block_registers_udt_symbol() {
+        let result = parse("Type PersonType\n    Name As String\n    Age As Long\nEnd Type\n");
+        let symbols = build_symbol_table(&result.ast);
+        let td = symbols
+            .symbols
+            .iter()
+            .find(|s| s.name.as_str() == "PersonType");
+        assert!(td.is_some(), "expected TypeDef symbol 'PersonType'");
+        let td = td.unwrap();
+        assert!(matches!(td.kind, SymbolKind::TypeDef));
+        match &td.detail {
+            SymbolDetail::TypeDef { members } => {
+                assert_eq!(members.len(), 2, "expected 2 members in TypeDef detail");
+            }
+            other => panic!("expected TypeDef detail, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn udt_members_accessible_by_name() {
+        let result = parse("Type PersonType\n    Name As String\n    Age As Long\nEnd Type\n");
+        let symbols = build_symbol_table(&result.ast);
+        let member = symbols
+            .symbols
+            .iter()
+            .find(|s| s.name.as_str() == "Name" && matches!(s.kind, SymbolKind::UdtMember));
+        assert!(member.is_some(), "expected UdtMember symbol 'Name'");
+        let member = member.unwrap();
+        match &member.detail {
+            SymbolDetail::UdtMember { type_name } => {
+                assert_eq!(type_name.as_str(), "String");
+            }
+            other => panic!("expected UdtMember detail, got {:?}", other),
+        }
+    }
 
     #[test]
     fn build_symbol_table_registers_local_dim_variable() {

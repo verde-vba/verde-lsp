@@ -727,7 +727,7 @@ impl<'a> Parser<'a> {
 
     fn parse_type_def(&mut self, visibility: Visibility) {
         let start = self.tokens[self.pos].span.start;
-        self.pos += 1;
+        self.pos += 1; // consume "Type"
 
         let name = if let Some(tok) = self.peek() {
             if tok.token == Token::Identifier {
@@ -741,20 +741,46 @@ impl<'a> Parser<'a> {
             return;
         };
 
+        let mut members: Vec<(SmolStr, Option<SmolStr>)> = Vec::new();
         while self.pos < self.tokens.len() {
+            self.skip_newlines();
+            if self.pos >= self.tokens.len() {
+                break;
+            }
             if self.tokens[self.pos].token == Token::EndType {
                 let end = self.tokens[self.pos].span.end;
                 self.pos += 1;
-
                 let node = AstNode::TypeDef(TypeDefNode {
                     name,
                     visibility,
-                    members: Vec::new(),
+                    members,
                     span: TextRange::new(start, end),
                 });
                 let id = self.ast.nodes.alloc(node);
                 self.ast.root.push(id);
                 return;
+            }
+            if self.tokens[self.pos].token == Token::Identifier {
+                let member_name = self.tokens[self.pos].text.clone();
+                self.pos += 1;
+                // Skip optional array-size notation `(n)` or `()`
+                if matches!(self.peek(), Some(t) if t.token == Token::LParen) {
+                    while self.pos < self.tokens.len() {
+                        let done = self.tokens[self.pos].token == Token::RParen;
+                        self.pos += 1;
+                        if done {
+                            break;
+                        }
+                    }
+                }
+                let type_name = if matches!(self.peek(), Some(t) if t.token == Token::As) {
+                    self.pos += 1; // consume "As"
+                    self.parse_dotted_type_name().map(|(n, _)| n)
+                } else {
+                    None
+                };
+                members.push((member_name, type_name));
+                continue;
             }
             self.pos += 1;
         }
@@ -1411,6 +1437,59 @@ mod tests {
             }
             other => panic!("expected Exit statement, got {:?}", other),
         }
+    }
+
+    fn type_def(ast: &Ast) -> &TypeDefNode {
+        ast.nodes
+            .iter()
+            .find_map(|(_, n)| match n {
+                AstNode::TypeDef(t) => Some(t),
+                _ => None,
+            })
+            .expect("expected TypeDefNode")
+    }
+
+    #[test]
+    fn parses_type_block_with_single_member() {
+        let result = parse("Type MyType\n    x As Long\nEnd Type\n");
+        let td = type_def(&result.ast);
+        assert_eq!(td.name.as_str(), "MyType");
+        assert_eq!(td.members.len(), 1, "expected 1 member");
+        assert_eq!(td.members[0].0.as_str(), "x");
+        assert_eq!(td.members[0].1.as_deref(), Some("Long"));
+    }
+
+    #[test]
+    fn parses_type_block_with_multiple_members() {
+        let result = parse("Type MyType\n    x As Long\n    name As String\nEnd Type\n");
+        let td = type_def(&result.ast);
+        assert_eq!(td.members.len(), 2, "expected 2 members");
+        assert_eq!(td.members[0].0.as_str(), "x");
+        assert_eq!(td.members[0].1.as_deref(), Some("Long"));
+        assert_eq!(td.members[1].0.as_str(), "name");
+        assert_eq!(td.members[1].1.as_deref(), Some("String"));
+    }
+
+    #[test]
+    fn parses_empty_type_block() {
+        let result = parse("Type MyType\nEnd Type\n");
+        let td = type_def(&result.ast);
+        assert_eq!(td.name.as_str(), "MyType");
+        assert!(td.members.is_empty(), "expected empty members");
+    }
+
+    #[test]
+    fn parses_type_block_with_as_clause_types() {
+        let result = parse(
+            "Type PersonType\n    Age As Integer\n    Height As Double\n    Active As Boolean\nEnd Type\n",
+        );
+        let td = type_def(&result.ast);
+        assert_eq!(td.members.len(), 3, "expected 3 members");
+        let types: Vec<Option<&str>> = td.members.iter().map(|(_, t)| t.as_deref()).collect();
+        assert_eq!(
+            types,
+            vec![Some("Integer"), Some("Double"), Some("Boolean")]
+        );
     }
 
     #[test]

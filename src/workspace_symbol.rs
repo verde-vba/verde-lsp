@@ -48,5 +48,6 @@ fn vba_kind_to_lsp(kind: &VbaSymbolKind) -> SymbolKind {
         VbaSymbolKind::TypeDef => SymbolKind::STRUCT,
         VbaSymbolKind::EnumDef => SymbolKind::ENUM,
         VbaSymbolKind::EnumMember => SymbolKind::ENUM_MEMBER,
+        VbaSymbolKind::UdtMember => SymbolKind::FIELD,
     }
 }

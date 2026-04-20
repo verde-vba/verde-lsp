@@ -16,6 +16,7 @@ fn symbol_kind_to_completion_kind(kind: &SymbolKind) -> CompletionItemKind {
         SymbolKind::TypeDef => CompletionItemKind::STRUCT,
         SymbolKind::EnumDef => CompletionItemKind::ENUM,
         SymbolKind::EnumMember => CompletionItemKind::ENUM_MEMBER,
+        SymbolKind::UdtMember => CompletionItemKind::FIELD,
     }
 }
 

@@ -107,6 +107,9 @@ fn symbol_to_hover(sym: &Symbol) -> Hover {
         SymbolDetail::EnumMember { parent_enum, value } => {
             format!("{}.{} = {}", parent_enum, sym.name, value)
         }
+        SymbolDetail::UdtMember { type_name } => {
+            format!("{} As {}", sym.name, type_name)
+        }
     };
 
     Hover {
