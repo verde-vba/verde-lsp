@@ -45,6 +45,10 @@ fn server_capabilities() -> ServerCapabilities {
             ..Default::default()
         }),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
+        signature_help_provider: Some(SignatureHelpOptions {
+            trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
+            ..Default::default()
+        }),
         definition_provider: Some(OneOf::Left(true)),
         rename_provider: Some(OneOf::Left(true)),
         references_provider: Some(OneOf::Left(true)),
@@ -143,6 +147,16 @@ impl LanguageServer for VbaLanguageServer {
         let position = params.text_document_position.position;
         let items = crate::completion::complete(&self.analysis, uri, position);
         Ok(Some(CompletionResponse::Array(items)))
+    }
+
+    async fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+        Ok(crate::signature_help::signature_help(
+            &self.analysis,
+            uri,
+            position,
+        ))
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
