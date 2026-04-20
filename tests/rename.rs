@@ -3,7 +3,18 @@ use verde_lsp::analysis::AnalysisHost;
 use verde_lsp::parser;
 use verde_lsp::rename;
 
-fn do_rename(source: &str, position: Position, new_name: &str) -> Option<tower_lsp::lsp_types::WorkspaceEdit> {
+fn make_host_two_files(uri_a: &Url, src_a: &str, uri_b: &Url, src_b: &str) -> AnalysisHost {
+    let host = AnalysisHost::new();
+    host.update(uri_a.clone(), src_a.to_string(), parser::parse(src_a));
+    host.update(uri_b.clone(), src_b.to_string(), parser::parse(src_b));
+    host
+}
+
+fn do_rename(
+    source: &str,
+    position: Position,
+    new_name: &str,
+) -> Option<tower_lsp::lsp_types::WorkspaceEdit> {
     let uri: Url = "file:///test.bas".parse().unwrap();
     let host = AnalysisHost::new();
     let parse_result = parser::parse(source);
@@ -19,8 +30,7 @@ fn rename_procedure_name_returns_workspace_edit() {
     let source = "Sub Foo()\nEnd Sub";
     let position = Position::new(0, 4); // on 'F' of "Foo"
 
-    let edit = do_rename(source, position, "Bar")
-        .expect("expected WorkspaceEdit, got None");
+    let edit = do_rename(source, position, "Bar").expect("expected WorkspaceEdit, got None");
 
     let changes = edit.changes.expect("expected changes map");
     let uri: Url = "file:///test.bas".parse().unwrap();
@@ -50,14 +60,18 @@ fn rename_includes_call_site_in_workspace_edit() {
     let source = "Sub Foo()\nEnd Sub\nSub Bar()\n    Call Foo()\nEnd Sub";
     let position = Position::new(0, 4); // on 'F' of declaration "Foo"
 
-    let edit = do_rename(source, position, "Baz")
-        .expect("expected WorkspaceEdit");
+    let edit = do_rename(source, position, "Baz").expect("expected WorkspaceEdit");
 
     let changes = edit.changes.expect("expected changes map");
     let uri: Url = "file:///test.bas".parse().unwrap();
     let edits = changes.get(&uri).expect("expected edits for file URI");
 
-    assert_eq!(edits.len(), 2, "expected 2 edits: declaration + call site, got {}", edits.len());
+    assert_eq!(
+        edits.len(),
+        2,
+        "expected 2 edits: declaration + call site, got {}",
+        edits.len()
+    );
 }
 
 #[test]
@@ -73,8 +87,8 @@ fn cross_file_rename_includes_other_file_occurrences() {
     host.update(uri_a.clone(), src_a.to_string(), parser::parse(src_a));
     host.update(uri_b.clone(), src_b.to_string(), parser::parse(src_b));
 
-    let edit = rename::rename(&host, &uri_a, Position::new(0, 11), "Bar")
-        .expect("expected WorkspaceEdit");
+    let edit =
+        rename::rename(&host, &uri_a, Position::new(0, 11), "Bar").expect("expected WorkspaceEdit");
     let changes = edit.changes.expect("expected changes");
 
     assert!(
@@ -108,5 +122,51 @@ fn rename_from_call_site_in_other_file() {
         changes.contains_key(&uri_a),
         "expected module_a to be included in rename changes, got: {:?}",
         changes.keys().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn rename_private_sub_stays_in_single_file() {
+    // "Private Sub Foo()\nEnd Sub\n"
+    //  0         1
+    //  0123456789012345
+    // 'F' is at column 12
+    let uri_a: Url = "file:///module_a.bas".parse().unwrap();
+    let src_a = "Private Sub Foo()\nEnd Sub\n";
+    let uri_b: Url = "file:///module_b.bas".parse().unwrap();
+    let src_b = "Private Sub Foo()\nEnd Sub\n";
+
+    let host = make_host_two_files(&uri_a, src_a, &uri_b, src_b);
+    let edit =
+        rename::rename(&host, &uri_a, Position::new(0, 12), "Bar").expect("expected WorkspaceEdit");
+    let changes = edit.changes.unwrap();
+
+    assert!(changes.contains_key(&uri_a), "module_a should be renamed");
+    assert!(
+        !changes.contains_key(&uri_b),
+        "module_b must NOT be renamed — Private symbols are module-scoped"
+    );
+}
+
+#[test]
+fn rename_local_variable_stays_in_single_file() {
+    // "Sub Foo()\n    Dim x As Integer\n    x = 1\nEnd Sub\n"
+    // line 1: "    Dim x As Integer"
+    //          0123456789
+    // 'x' is at column 8
+    let uri_a: Url = "file:///module_a.bas".parse().unwrap();
+    let src_a = "Sub Foo()\n    Dim x As Integer\n    x = 1\nEnd Sub\n";
+    let uri_b: Url = "file:///module_b.bas".parse().unwrap();
+    let src_b = "Sub Bar()\n    Dim x As String\n    x = \"hi\"\nEnd Sub\n";
+
+    let host = make_host_two_files(&uri_a, src_a, &uri_b, src_b);
+    let edit = rename::rename(&host, &uri_a, Position::new(1, 8), "myVar")
+        .expect("expected WorkspaceEdit");
+    let changes = edit.changes.unwrap();
+
+    assert!(changes.contains_key(&uri_a), "module_a should be renamed");
+    assert!(
+        !changes.contains_key(&uri_b),
+        "module_b must NOT be renamed — local variables are procedure-scoped"
     );
 }
