@@ -49,11 +49,12 @@ impl AnalysisHost {
 
     pub fn diagnostics(&self, uri: &Url) -> Vec<Diagnostic> {
         if let Some(file) = self.files.get(uri) {
-            let cross_module_names: std::collections::HashSet<String> = self
+            let mut cross_module_names: std::collections::HashSet<String> = self
                 .all_public_symbols_from_other_files(uri)
                 .into_iter()
                 .map(|s| s.name.to_ascii_lowercase())
                 .collect();
+            cross_module_names.extend(self.collect_other_module_names(uri));
             diagnostics::compute(
                 &file.parse_result,
                 &file.symbols,
@@ -63,6 +64,23 @@ impl AnalysisHost {
         } else {
             Vec::new()
         }
+    }
+
+    /// Extract bare module names (filename without extension, lowercased) from
+    /// all registered files except `current_uri`. Used to allow `ModuleA.Foo`
+    /// qualified calls without triggering undeclared-variable warnings.
+    fn collect_other_module_names(&self, current_uri: &Url) -> Vec<String> {
+        self.files
+            .iter()
+            .filter(|e| e.key() != current_uri)
+            .filter_map(|e| {
+                e.key()
+                    .path_segments()
+                    .and_then(|mut s| s.next_back())
+                    .and_then(|f| f.split('.').next())
+                    .map(|name| name.to_ascii_lowercase())
+            })
+            .collect()
     }
 
     pub fn with_source<T>(
