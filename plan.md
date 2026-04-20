@@ -1,8 +1,8 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+22 完了)
+> 最終更新: 2026-04-21 (Sprint N+23 完了)
 > 現在ブランチ: main
-> テスト基準: 90 green (lib 36 + integration 54), cargo clippy -D warnings 0 件
+> テスト基準: 92 green (lib 36 + integration 56), cargo clippy -D warnings 0 件
 
 ---
 
@@ -50,11 +50,62 @@ Option (A) — `rename.rs` の guard を `(word, cross_file_eligible)` に拡張
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+23)
+## Sprint N+23 (2026-04-21)
+
+### Sprint Goal
+PBI-21: intra-file scope-aware rename — 同一ファイル内でも proc_scope を尊重。cursor が proc_scope=Some(X) のシンボル上にある場合、同 procedure 内の occurrences のみ rename する。
+
+### Path Chosen
+Option (A) — `rename.rs` の closure に `proc_constraint: Option<TextRange>` を追加。2段階で決定:
+1. `find_symbol_at_position` で cursor symbol の proc_scope を確認 (declaration site)
+2. use site の場合は `position_to_offset` + `proc_ranges` で containing proc を特定、word がそこのローカルシンボルか確認してから constraint を設定
+
+### Scope
+- `tests/rename.rs` に 2 テスト追加 (RED)
+  - `rename_local_var_stays_within_its_own_procedure`
+  - `rename_from_use_site_stays_within_its_procedure`
+- `src/rename.rs` で proc_constraint 計算と occurrences フィルタを追加 (GREEN)
+
+### Acceptance Criteria
+1. 同一ファイル内の別 procedure に同名ローカル変数がある場合、cursor の procedure のみ rename される
+2. declaration site (Dim x) と use site (x = 1) の両方でスコープ制限が動作する
+3. Public module-level シンボルの cross-file rename は影響なし (proc_constraint=None)
+4. cargo test 90 → 92 green, clippy -D warnings 0 件
+
+---
+
+## Sprint N+23 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-21 intra-file scope-aware rename」を完全達成。
+
+### KPT
+
+#### Keep
+- 2段階の proc_constraint 決定ロジック (declaration site は symbol at cursor、use site は containing proc + local check) が宣言/使用どちらのカーソル位置でも正確に動作。
+- `proc_constraint = None` のケース (Public module-level、cross-file) では既存動作が完全に保たれる。フィルタの `match proc_constraint { Some(c) if file_uri == *uri => ... }` パターンが clean。
+- `TextRange: Copy` を活かして `proc_ranges` から `*r` でコピー取得、追加アロケーションゼロ。
+
+#### Problem
+- cargo test の並列実行時に >60s 警告が散発することがある (既知、高負荷環境の issue)。
+
+#### Try
+- `cargo test` の並列度制御 (`-- --test-threads=N`) を Follow-up として記録 (優先度低)。
+
+---
+
+## Follow-ups (優先度低)
+
+- cargo test 並列化チューニング: >60s 警告散発対策として `-- --test-threads=4` など設定を検討。CI では影響なし。
+
+---
+
+## 次 Sprint 推奨 (Sprint N+24)
 
 **Sprint Goal 候補**:
-1. intra-file scope-aware rename (同一ファイル内でも proc_scope を尊重) — XS
-2. symbol kind 対応 (completion/hover での種別表示改善) — S
+1. symbol kind 対応 (completion/hover での種別表示改善) — S
+2. rename のパラメータスコープ対応 (procedure params も proc_constraint で絞り込み) — XS
 
 ---
 
@@ -112,6 +163,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-18 | rename guard cross-module フォールバック | S | **Done** |
 | PBI-19 | textDocument/documentSymbol プロバイダ | S | **Done** |
 | PBI-20 | Private シンボルの cross-file rename 抑止 | XS | **Done** |
+| PBI-21 | intra-file scope-aware rename (proc_scope 尊重) | XS | **Done** |
 
 ---
 
