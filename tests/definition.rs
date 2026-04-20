@@ -114,3 +114,55 @@ fn goto_definition_crosses_module_boundary() {
         _ => panic!("expected scalar goto_definition response"),
     }
 }
+
+// Two Sub procs both declaring a parameter named "x".
+// Goto-def from Sub A's use site must jump to Sub A's parameter, not Sub B's.
+//
+// Sub A(x As Integer)   <- line 0, 'x' at col 6
+//     x = 1             <- line 1, 'x' at col 4  <- cursor
+// End Sub               <- line 2
+// Sub B(x As Integer)   <- line 3, 'x' at col 6
+//     x = 1             <- line 4
+// End Sub               <- line 5
+#[test]
+fn goto_def_parameter_from_use_site_jumps_to_owning_proc_param() {
+    let source =
+        "Sub A(x As Integer)\n    x = 1\nEnd Sub\nSub B(x As Integer)\n    x = 1\nEnd Sub\n";
+    let usage_pos = Position::new(1, 4); // 'x' in Sub A's body
+
+    let def = do_goto(source, usage_pos)
+        .expect("expected goto-def to return Sub A's parameter declaration");
+
+    assert_eq!(
+        def.line, 0,
+        "expected definition on line 0 (Sub A's parameter), got {}",
+        def.line
+    );
+    assert_eq!(
+        def.character, 6,
+        "expected col 6 ('x' in Sub A params), got {}",
+        def.character
+    );
+}
+
+// Symmetric test: cursor in Sub B's body — must jump to Sub B's parameter (line 3).
+#[test]
+fn goto_def_parameter_in_second_proc_jumps_to_its_own_param() {
+    let source =
+        "Sub A(x As Integer)\n    x = 1\nEnd Sub\nSub B(x As Integer)\n    x = 1\nEnd Sub\n";
+    let usage_pos = Position::new(4, 4); // 'x' in Sub B's body
+
+    let def = do_goto(source, usage_pos)
+        .expect("expected goto-def to return Sub B's parameter declaration");
+
+    assert_eq!(
+        def.line, 3,
+        "expected definition on line 3 (Sub B's parameter), got {}",
+        def.line
+    );
+    assert_eq!(
+        def.character, 6,
+        "expected col 6 ('x' in Sub B params), got {}",
+        def.character
+    );
+}
