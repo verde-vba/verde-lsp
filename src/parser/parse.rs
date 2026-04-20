@@ -542,7 +542,7 @@ impl<'a> Parser<'a> {
 
     /// Dispatch to the appropriate per-statement parser based on the current
     /// leading token. Declaration keywords (Dim/Static/Const/ReDim) produce a
-    /// `LocalDeclaration`; block-opening keywords (If/For/With/Select) and
+    /// `LocalDeclaration`; block-opening keywords (If/For/With/Select/While) and
     /// top-level-statement keywords (Call/Set) produce the matching
     /// `StatementNode` variant with the header-line tokens captured. Anything
     /// else falls back to an `Expression` statement. Callers must ensure
