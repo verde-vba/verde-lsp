@@ -116,11 +116,19 @@ pub fn load_builtin_types() -> Vec<ExcelObjectType> {
                 prop("ManualUpdate", "Boolean", false),
             ],
             methods: vec![
-                method("PivotFields", Some("PivotFields"), &[("Index", "Variant", true)]),
+                method(
+                    "PivotFields",
+                    Some("PivotFields"),
+                    &[("Index", "Variant", true)],
+                ),
                 method("RefreshTable", Some("Boolean"), &[]),
                 method("ClearTable", None, &[]),
                 method("Update", None, &[]),
-                method("ChangePivotCache", None, &[("PivotCache", "PivotCache", false)]),
+                method(
+                    "ChangePivotCache",
+                    None,
+                    &[("PivotCache", "PivotCache", false)],
+                ),
             ],
         },
         ExcelObjectType {
@@ -136,10 +144,21 @@ pub fn load_builtin_types() -> Vec<ExcelObjectType> {
                 prop("SeriesCollection", "SeriesCollection", true),
             ],
             methods: vec![
-                method("SeriesCollection", Some("SeriesCollection"), &[("Index", "Variant", true)]),
+                method(
+                    "SeriesCollection",
+                    Some("SeriesCollection"),
+                    &[("Index", "Variant", true)],
+                ),
                 method("SetSourceData", None, &[("Source", "Range", false)]),
                 method("Activate", None, &[]),
-                method("Export", Some("Boolean"), &[("Filename", "String", false), ("FilterName", "String", true)]),
+                method(
+                    "Export",
+                    Some("Boolean"),
+                    &[
+                        ("Filename", "String", false),
+                        ("FilterName", "String", true),
+                    ],
+                ),
                 method("Select", None, &[]),
                 method("Copy", None, &[]),
             ],

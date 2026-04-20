@@ -3,6 +3,7 @@ use tower_lsp::lsp_types::*;
 use crate::analysis::resolve::{parse_dot_access_at, position_to_offset};
 use crate::analysis::symbols::{SymbolDetail, SymbolKind, SymbolTable};
 use crate::analysis::AnalysisHost;
+use crate::excel_model::types::load_builtin_types;
 use crate::vba_builtins;
 
 fn symbol_kind_to_completion_kind(kind: &SymbolKind) -> CompletionItemKind {
@@ -197,6 +198,35 @@ fn complete_dot_access(
             ..Default::default()
         })
         .collect();
+
+    if !members.is_empty() {
+        return Some(members);
+    }
+
+    // Fallback: look up the type in Excel builtin types (e.g. Range, PivotTable, Chart, Shape).
+    let builtin_types = load_builtin_types();
+    if let Some(excel_type) = builtin_types
+        .iter()
+        .find(|t| t.name.eq_ignore_ascii_case(&type_name))
+    {
+        let mut items: Vec<CompletionItem> = excel_type
+            .properties
+            .iter()
+            .map(|p| CompletionItem {
+                label: p.name.to_string(),
+                kind: Some(CompletionItemKind::PROPERTY),
+                detail: Some(p.return_type.to_string()),
+                ..Default::default()
+            })
+            .collect();
+        items.extend(excel_type.methods.iter().map(|m| CompletionItem {
+            label: m.name.to_string(),
+            kind: Some(CompletionItemKind::METHOD),
+            detail: m.return_type.as_ref().map(|t| t.to_string()),
+            ..Default::default()
+        }));
+        return Some(items);
+    }
 
     Some(members)
 }
