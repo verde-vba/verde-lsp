@@ -1,25 +1,14 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+17 完了)
+> 最終更新: 2026-04-21 (Sprint N+18 完了)
 > 現在ブランチ: main
-> テスト基準: 77 green (lib 36 + integration 41), cargo clippy -D warnings 0 件
+> テスト基準: 79 green (lib 36 + integration 43), cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+18)
+## 次 Sprint 推奨 (Sprint N+19)
 
-**Sprint Goal**: PBI-16 を完遂し、textDocument/references をクロスファイルに拡張する
-
-### PBI-16 — textDocument/references クロスファイル拡張 (S) ✅ Ready
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | `find_references` が現在ファイルだけでなく全ファイルを検索し、ワークスペース全体の参照箇所を返す。 |
-| **背景** | PBI-15 で単一ファイル実装済み。`AnalysisHost.files` は private。`all_file_sources() -> Vec<(Url, String)>` ヘルパーを追加して全ファイルを横断する。 |
-| **実装方針** | `AnalysisHost::all_file_sources()` を追加。`find_references` がカーソルの単語を取得後、全ファイルで `find_all_word_occurrences` を呼んで Location を集約する。 |
-| **受入基準** | (1) 2 ファイル workspace でシンボル X が両ファイルにあるとき references が両ファイルの Location を返す。(2) 79+ green, clippy 0。 |
-| **見積サイズ** | S |
-| **依存** | PBI-15 (完了済み) |
+**Sprint Goal 候補**: 新規 PBI を Refinement 後に実行
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -69,6 +58,36 @@
 
 #### Try
 - `check_option_explicit` の引数が 5 個を超えた時点で `DiagnosticsContext` 構造体を導入する。
+
+---
+
+## Sprint N+18 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-16 textDocument/references クロスファイル拡張」を完全達成。
+
+### KPT
+
+#### Keep
+- `all_file_sources()` という汎用ヘルパーで references 以外の将来用途にも使える API を定義。
+- PBI-15 の変更差分が `src/references.rs` 内に閉じており、`find_references` の差分は +11/-14 行と小さかった。
+
+#### Problem
+- `rename` はまだ single-file のみ。PBI-17 として cross-file rename を追加できる。
+
+#### Try
+- `find_references` の結果を `rename` でも活用できるか検討 (クロスファイル rename)。
+
+---
+
+## 完了済み (Sprint N+18)
+
+| コミット | 内容 |
+|----------|------|
+| `1b81cf6` | docs(scrum): PBI-16 Refinement |
+| `02d613b` | test: クロスファイル references RED テスト (PBI-16) |
+| `4d5a65f` | feat: textDocument/references クロスファイル拡張 (PBI-16) |
 
 ---
 
@@ -368,7 +387,7 @@
 | PBI-13 | workbook-context.json tables/named_ranges 補完拡張 | XS | **Done** |
 | PBI-14 | workbook-context.json 自動再読み込み (didChangeWatchedFiles) | S | **Done** |
 | PBI-15 | textDocument/references プロバイダ実装 | XS | **Done** |
-| PBI-16 | textDocument/references クロスファイル拡張 | S | **Ready** |
+| PBI-16 | textDocument/references クロスファイル拡張 | S | **Done** |
 | PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
