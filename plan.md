@@ -1,25 +1,14 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+14 完了)
+> 最終更新: 2026-04-21 (Sprint N+15 完了)
 > 現在ブランチ: main
-> テスト基準: 71 green (lib 36 + integration 35), cargo clippy -D warnings 0 件
+> テスト基準: 73 green (lib 36 + integration 37), cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+15)
+## 次 Sprint 推奨 (Sprint N+16)
 
-**Sprint Goal**: PBI-13 を完遂し、workbook-context.json から tables/named_ranges も補完候補に追加する
-
-### PBI-13 — workbook-context.json tables/named_ranges 補完拡張 (XS) ✅ Ready
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | `workbook-context.json` の `tables` / `named_ranges` フィールドも completion 候補に追加する。 |
-| **背景** | PBI-11 で `sheets` のみ実装。CLAUDE.md は table/named_range 補完も言及。`WorkbookContext` に 2 フィールドを追加し `complete()` に 2 ループを加えるだけ。 |
-| **実装方針** | `WorkbookContext` に `tables: Vec<String>` / `named_ranges: Vec<String>` を追加（`#[serde(default)]`）。`AnalysisHost` に `workbook_tables()` / `workbook_named_ranges()` を追加。`complete()` の末尾に 2 ループ（kind=MODULE/CONSTANT）。 |
-| **受入基準** | (1) `workbook_tables(["Table1"])` 設定後に `Table1` が補完候補に出る。(2) `workbook_named_ranges(["MyRange"])` 設定後に `MyRange` が補完候補に出る。(3) 73+ green, clippy 0。 |
-| **見積サイズ** | XS |
-| **依存** | PBI-11 (完了済み) |
+**Sprint Goal 候補**: PBI-14 — workbook-context.json 自動再読み込み (workspace/didChangeWatchedFiles 対応) または新規 diagnostics 改善
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -69,6 +58,37 @@
 
 #### Try
 - `check_option_explicit` の引数が 5 個を超えた時点で `DiagnosticsContext` 構造体を導入する。
+
+---
+
+## Sprint N+15 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-13 workbook-context.json tables/named_ranges 補完拡張」を完全達成。
+
+### KPT
+
+#### Keep
+- REFACTOR で `push_named_items` ヘルパーを抽出。27 行 → 3 行呼び出しに圧縮。「3 ループ同パターン = 抽出対象」の判断が迅速だった。
+- `..Default::default()` を既存テストに追加するだけで後方互換を維持できた。`Default` derive の価値を再確認。
+
+#### Problem
+- `workbook-context.json` の変更を LSP 再起動なしに反映する方法がない。`workspace/didChangeWatchedFiles` 対応が次の課題。
+
+#### Try
+- PBI-14 として `workspace/didChangeWatchedFiles` で JSON 再読み込みを実装する。
+
+---
+
+## 完了済み (Sprint N+15)
+
+| コミット | 内容 |
+|----------|------|
+| `7c8c098` | docs(scrum): PBI-13 Refinement |
+| `2e594c2` | test: workbook tables/named_ranges 補完 RED テスト (PBI-13) |
+| `1e1836b` | feat: workbook-context.json tables/named_ranges を completion 候補に追加 (PBI-13) |
+| `1c946e2` | refactor: push_named_items ヘルパー抽出 (PBI-13 REFACTOR) |
 
 ---
 
@@ -274,7 +294,7 @@
 | PBI-09c | クロスモジュール diagnostics (undeclared 誤検出除外) | S | **Done** |
 | PBI-10 | For Each ループ変数 undeclared 誤検出除外 | S | **Won't Do** (already working) |
 | PBI-11 | workbook-context.json シート名補完 | M | **Done** |
-| PBI-13 | workbook-context.json tables/named_ranges 補完拡張 | XS | **Ready** |
+| PBI-13 | workbook-context.json tables/named_ranges 補完拡張 | XS | **Done** |
 | PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
