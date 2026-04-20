@@ -177,3 +177,41 @@ fn does_not_warn_on_while_with_declared_condition() {
         "While loop with declared condition variable",
     );
 }
+
+#[test]
+fn option_explicit_flags_undeclared_in_redim_bounds() {
+    let source = "Option Explicit\nSub Demo()\n    Dim arr() As Long\n    ReDim arr(undeclaredSize)\nEnd Sub\n";
+    let diags = diagnose(source);
+    assert!(
+        diags.iter().any(|d| d.message.contains("undeclaredSize")),
+        "expected warning for undeclaredSize in ReDim bounds, got: {diags:?}"
+    );
+}
+
+#[test]
+fn option_explicit_flags_undeclared_in_do_while_header() {
+    let source = "Option Explicit\nSub Demo()\n    Do While undeclaredCond\n    Loop\nEnd Sub\n";
+    let diags = diagnose(source);
+    assert!(
+        diags.iter().any(|d| d.message.contains("undeclaredCond")),
+        "expected warning for undeclaredCond in Do While header, got: {diags:?}"
+    );
+}
+
+#[test]
+fn option_explicit_flags_undeclared_in_do_until_header() {
+    let source = "Option Explicit\nSub Demo()\n    Do Until undeclaredCond\n    Loop\nEnd Sub\n";
+    let diags = diagnose(source);
+    assert!(
+        diags.iter().any(|d| d.message.contains("undeclaredCond")),
+        "expected warning for undeclaredCond in Do Until header, got: {diags:?}"
+    );
+}
+
+#[test]
+fn does_not_warn_on_do_while_with_declared_condition() {
+    assert_no_diagnostics(
+        "Option Explicit\n\nSub Demo()\n    Dim running As Boolean\n    running = True\n    Do While running\n    Loop\nEnd Sub\n",
+        "Do While loop with declared condition variable",
+    );
+}

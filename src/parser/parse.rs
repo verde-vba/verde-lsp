@@ -468,15 +468,15 @@ impl<'a> Parser<'a> {
         Some((SmolStr::from(buf), end_offset))
     }
 
-    /// Parse a local declaration starting at the Dim/Static/Const/ReDim keyword.
+    /// Parse a local declaration starting at the Dim/Static/Const keyword.
     /// Collects declared identifier names and their optional `As <Type>` clauses,
     /// stopping at a statement terminator (Newline/Colon) or EOF.
     /// Leaves `pos` on the terminator (or EOF); the caller skips it.
     fn parse_local_declaration(&mut self, kind: DeclKind) -> LocalDeclarationNode {
         let start_offset = self.tokens.get(self.pos).map(|t| t.span.start).unwrap_or(0);
-        self.pos += 1; // consume the kind keyword (Dim/Static/Const/ReDim)
+        self.pos += 1; // consume the kind keyword (Dim/Static/Const)
 
-        // `ReDim` optionally has `Preserve` right after the keyword.
+        // (ReDim is now routed to RedimStatementNode and never reaches here.)
         if matches!(self.peek(), Some(t) if t.token == Token::Preserve) {
             self.pos += 1;
         }
@@ -541,20 +541,19 @@ impl<'a> Parser<'a> {
     }
 
     /// Dispatch to the appropriate per-statement parser based on the current
-    /// leading token. Declaration keywords (Dim/Static/Const/ReDim) produce a
-    /// `LocalDeclaration`; block-opening keywords (If/For/With/Select/While) and
-    /// top-level-statement keywords (Call/Set) produce the matching
-    /// `StatementNode` variant with the header-line tokens captured. Anything
-    /// else falls back to an `Expression` statement. Callers must ensure
-    /// `pos` is on the first token of the statement; this function returns a
-    /// ready-to-alloc `AstNode::Statement`.
+    /// leading token. Declaration keywords (Dim/Static/Const) produce a
+    /// `LocalDeclaration`; block-opening keywords (If/For/With/Select/While/Do)
+    /// and array-resize keyword (ReDim) and top-level-statement keywords
+    /// (Call/Set) produce the matching `StatementNode` variant with the
+    /// header-line tokens captured. Anything else falls back to an `Expression`
+    /// statement. Callers must ensure `pos` is on the first token of the
+    /// statement; this function returns a ready-to-alloc `AstNode::Statement`.
     fn classify_and_parse_statement(&mut self) -> AstNode {
         let head = self.peek().map(|t| t.token.clone());
         let decl_kind = match head {
             Some(Token::Dim) => Some(DeclKind::Dim),
             Some(Token::Static) => Some(DeclKind::Static),
             Some(Token::Const) => Some(DeclKind::Const),
-            Some(Token::ReDim) => Some(DeclKind::ReDim),
             _ => None,
         };
         if let Some(kind) = decl_kind {
@@ -590,6 +589,14 @@ impl<'a> Parser<'a> {
             Some(Token::While) => {
                 let (tokens, span) = self.collect_statement_tokens();
                 StatementNode::While(WhileStatementNode { tokens, span })
+            }
+            Some(Token::Do) => {
+                let (tokens, span) = self.collect_statement_tokens();
+                StatementNode::Do(DoStatementNode { tokens, span })
+            }
+            Some(Token::ReDim) => {
+                let (tokens, span) = self.collect_statement_tokens();
+                StatementNode::Redim(RedimStatementNode { tokens, span })
             }
             _ => StatementNode::Expression(self.parse_expression_statement()),
         };
@@ -1243,6 +1250,58 @@ mod tests {
                 );
             }
             other => panic!("expected While statement, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_captures_do_while_statement_header() {
+        let result = parse("Sub F()\n    Do While x > 0\n    Loop\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert!(!proc.body.is_empty(), "expected at least one statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::Do(node) => {
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::Do),
+                    "expected the Do keyword inside captured header tokens"
+                );
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::While),
+                    "expected the While keyword inside captured Do header tokens"
+                );
+            }
+            other => panic!("expected Do statement, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_captures_do_until_statement_header() {
+        let result = parse("Sub F()\n    Do Until x = 0\n    Loop\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert!(!proc.body.is_empty(), "expected at least one statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::Do(node) => {
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::Until),
+                    "expected the Until keyword inside captured Do header tokens"
+                );
+            }
+            other => panic!("expected Do statement, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_captures_redim_statement_header() {
+        let result = parse("Sub F()\n    ReDim arr(10)\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert!(!proc.body.is_empty(), "expected at least one statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::Redim(node) => {
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::ReDim),
+                    "expected the ReDim keyword inside captured tokens"
+                );
+            }
+            other => panic!("expected Redim statement, got {:?}", other),
         }
     }
 }

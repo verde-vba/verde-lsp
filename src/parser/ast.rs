@@ -139,7 +139,6 @@ pub enum DeclKind {
     Dim,
     Static,
     Const,
-    ReDim,
 }
 
 #[derive(Debug, Clone, PartialEq)]
