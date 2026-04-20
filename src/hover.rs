@@ -104,10 +104,9 @@ fn symbol_to_hover(sym: &Symbol) -> Hover {
         SymbolDetail::EnumDef { members } => {
             format!("Enum {} ({} members)", sym.name, members.len())
         }
-        SymbolDetail::EnumMember { parent_enum, value } => match value {
-            Some(v) => format!("{}.{} = {}", parent_enum, sym.name, v),
-            None => format!("{}.{}", parent_enum, sym.name),
-        },
+        SymbolDetail::EnumMember { parent_enum, value } => {
+            format!("{}.{} = {}", parent_enum, sym.name, value)
+        }
     };
 
     Hover {

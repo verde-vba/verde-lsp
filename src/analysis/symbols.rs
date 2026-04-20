@@ -58,7 +58,7 @@ pub enum SymbolDetail {
     },
     EnumMember {
         parent_enum: SmolStr,
-        value: Option<i64>,
+        value: i64,
     },
 }
 
@@ -201,12 +201,12 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                     let resolved = match value {
                         Some(v) => {
                             next_value = v + 1;
-                            Some(*v)
+                            *v
                         }
                         None => {
                             let implicit = next_value;
                             next_value += 1;
-                            Some(implicit)
+                            implicit
                         }
                     };
                     symbols.push(Symbol {
@@ -295,7 +295,7 @@ mod tests {
             .expect("expected enum member 'Red' in symbol table");
         match &red.detail {
             SymbolDetail::EnumMember { value, .. } => {
-                assert_eq!(*value, Some(1), "expected Red = 1, got {:?}", value);
+                assert_eq!(*value, 1, "expected Red = 1, got {:?}", value);
             }
             other => panic!("expected SymbolDetail::EnumMember for Red, got {:?}", other),
         }
@@ -307,7 +307,7 @@ mod tests {
             .expect("expected enum member 'Green' in symbol table");
         match &green.detail {
             SymbolDetail::EnumMember { value, .. } => {
-                assert_eq!(*value, Some(2), "expected Green = 2, got {:?}", value);
+                assert_eq!(*value, 2, "expected Green = 2, got {:?}", value);
             }
             other => panic!(
                 "expected SymbolDetail::EnumMember for Green, got {:?}",
@@ -327,7 +327,7 @@ mod tests {
             .expect("expected enum member 'Minus' in symbol table");
         match &sym.detail {
             SymbolDetail::EnumMember { value, .. } => {
-                assert_eq!(*value, Some(-1), "expected Minus = -1, got {:?}", value);
+                assert_eq!(*value, -1, "expected Minus = -1, got {:?}", value);
             }
             other => panic!(
                 "expected SymbolDetail::EnumMember for Minus, got {:?}",
@@ -347,12 +347,7 @@ mod tests {
             .expect("expected enum member 'Ten' in symbol table");
         match &sym.detail {
             SymbolDetail::EnumMember { value, .. } => {
-                assert_eq!(
-                    *value,
-                    Some(16),
-                    "expected Ten = &H10 (= 16), got {:?}",
-                    value
-                );
+                assert_eq!(*value, 16, "expected Ten = &H10 (= 16), got {:?}", value);
             }
             other => panic!("expected SymbolDetail::EnumMember for Ten, got {:?}", other),
         }
@@ -362,7 +357,7 @@ mod tests {
     fn enum_implicit_value_follows_previous_member() {
         let result = parse("Enum Foo\n    A\n    B = 10\n    C\nEnd Enum\n");
         let symbols = build_symbol_table(&result.ast);
-        for (name, expected) in [("A", Some(0i64)), ("B", Some(10i64)), ("C", Some(11i64))] {
+        for (name, expected) in [("A", 0i64), ("B", 10i64), ("C", 11i64)] {
             let sym = symbols
                 .symbols
                 .iter()
