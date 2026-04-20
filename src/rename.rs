@@ -12,18 +12,15 @@ pub fn rename(
 ) -> Option<WorkspaceEdit> {
     host.with_source(uri, |symbols, source| {
         let word = resolve::find_word_at_position(source, position)?;
-        let matches = resolve::find_symbol_by_name(symbols, &word);
 
-        if matches.is_empty() {
+        // Guard: only rename identifiers that are known declared symbols.
+        if resolve::find_symbol_by_name(symbols, &word).is_empty() {
             return None;
         }
 
-        let edits: Vec<TextEdit> = matches
-            .iter()
-            .map(|sym| {
-                let range = resolve::text_range_to_lsp_range(source, sym.span);
-                TextEdit::new(range, new_name.to_string())
-            })
+        let edits: Vec<TextEdit> = resolve::find_all_word_occurrences(source, &word)
+            .into_iter()
+            .map(|range| TextEdit::new(resolve::text_range_to_lsp_range(source, range), new_name.to_string()))
             .collect();
 
         let mut changes = HashMap::new();

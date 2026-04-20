@@ -41,3 +41,21 @@ fn rename_procedure_name_returns_workspace_edit() {
         expected_range, text_edit.range
     );
 }
+
+#[test]
+fn rename_includes_call_site_in_workspace_edit() {
+    // Sub Foo() — declaration at line 0, col 4
+    // Sub Bar()
+    //     Call Foo() — call site at line 3, col 9
+    let source = "Sub Foo()\nEnd Sub\nSub Bar()\n    Call Foo()\nEnd Sub";
+    let position = Position::new(0, 4); // on 'F' of declaration "Foo"
+
+    let edit = do_rename(source, position, "Baz")
+        .expect("expected WorkspaceEdit");
+
+    let changes = edit.changes.expect("expected changes map");
+    let uri: Url = "file:///test.bas".parse().unwrap();
+    let edits = changes.get(&uri).expect("expected edits for file URI");
+
+    assert_eq!(edits.len(), 2, "expected 2 edits: declaration + call site, got {}", edits.len());
+}
