@@ -303,4 +303,44 @@ mod tests {
             ),
         }
     }
+
+    #[test]
+    fn enum_member_with_negative_value_captures_negative_integer() {
+        let result = parse("Enum Sign\n    Minus = -1\nEnd Enum\n");
+        let symbols = build_symbol_table(&result.ast);
+        let sym = symbols
+            .symbols
+            .iter()
+            .find(|s| s.name.as_str() == "Minus" && matches!(s.kind, SymbolKind::EnumMember))
+            .expect("expected enum member 'Minus' in symbol table");
+        match &sym.detail {
+            SymbolDetail::EnumMember { value, .. } => {
+                assert_eq!(*value, Some(-1), "expected Minus = -1, got {:?}", value);
+            }
+            other => panic!(
+                "expected SymbolDetail::EnumMember for Minus, got {:?}",
+                other
+            ),
+        }
+    }
+
+    #[test]
+    fn enum_member_with_hex_literal_captures_integer_value() {
+        let result = parse("Enum Flags\n    Ten = &H10\nEnd Enum\n");
+        let symbols = build_symbol_table(&result.ast);
+        let sym = symbols
+            .symbols
+            .iter()
+            .find(|s| s.name.as_str() == "Ten" && matches!(s.kind, SymbolKind::EnumMember))
+            .expect("expected enum member 'Ten' in symbol table");
+        match &sym.detail {
+            SymbolDetail::EnumMember { value, .. } => {
+                assert_eq!(*value, Some(16), "expected Ten = &H10 (= 16), got {:?}", value);
+            }
+            other => panic!(
+                "expected SymbolDetail::EnumMember for Ten, got {:?}",
+                other
+            ),
+        }
+    }
 }
