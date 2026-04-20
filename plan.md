@@ -10,25 +10,33 @@
 
 **Sprint Goal 候補**: PBI-10 — diagnostics の精度向上 or PBI-11 — workbook-context.json 連携
 
-### PBI-10 — For Each ループ変数の undeclared 誤検出除外 (Small) 🔲 Backlog
+### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
-| 項目 | 内容 |
-|------|------|
-| **目的** | `For Each ws In ...` の `ws` が Dim 宣言済みでも `Next ws` の `ws` が undeclared 扱いされるケースを修正。 |
-| **背景** | For Each の loop 変数は宣言済み変数の再利用だが、`scan_expression_tokens` が `Next` 行のトークンを追跡できていない可能性。 |
-| **受入基準** | For Each テストで `Next ws` に対して undeclared 警告が出ないこと。68+ green, clippy 0。 |
-| **見積サイズ** | S |
-| **依存** | なし |
+`does_not_warn_on_for_each_with_declared_items` が既に green のため実作業不要。
+`True`/`False`/`Nothing`/`Null`/`Empty` は lexer が専用トークン (`Token::True` 等) として処理するため
+`scan_expression_tokens` の Identifier チェックをバイパス — builtins への追加も不要。
 
-### PBI-11 — workbook-context.json シート名補完 (Medium) 🔲 Backlog
+### PBI-11 — workbook-context.json シート名補完 (Medium) 🔲 Backlog (Not Ready)
 
 | 項目 | 内容 |
 |------|------|
 | **目的** | workbook-context.json のシート名・テーブル名・名前付き範囲を補完候補に追加。 |
 | **背景** | CLAUDE.md に「workbook-context.json: provides sheet/table/named range info for completion」と記載あり。未実装。 |
-| **受入基準** | workbook-context.json からシート名が補完候補に現れること。 |
+| **Not Ready 理由** | `VbaLanguageServer` が workspace root (`InitializeParams.root_uri`) を未取得。JSON 読み込み前に root_uri フィールド追加が前提作業として必要。 |
+| **受入基準** | workbook-context.json からシート名が補完候補に現れること。68+ green, clippy 0。 |
 | **見積サイズ** | M |
-| **依存** | なし |
+| **依存** | workspace root 取得 (Tidy First コミット要) |
+
+### PBI-12 — 修飾呼び出し `ModuleA.Foo` の `ModuleA` undeclared 誤検出除外 (Small) ✅ Ready
+
+| 項目 | 内容 |
+|------|------|
+| **目的** | `Call ModuleA.Foo` のように module 名で修飾した呼び出しで `ModuleA` が undeclared として誤検出されないようにする。 |
+| **背景** | `scan_expression_tokens` の `after_dot` は `Foo` をスキップするが、`ModuleA` 自体は identifier として検査対象になる。モジュール名は symbol table になく URI から取得できる。 |
+| **実装方針** | `AnalysisHost::diagnostics` で `self.files.keys()` を走査し、URI の最終セグメントから拡張子を除いたモジュール名 (`uri.path_segments().next_back()?.split('.').next()`) を lowercase で `cross_module_names` に追加。別途 `collect_other_module_names(&self, current_uri: &Url)` ヘルパーを追加して責務を分離。 |
+| **受入基準** | (1) 2 ファイル workspace で `ModuleA.Foo` 呼び出しが `ModuleA` undeclared 警告を出さない。(2) 本来の未宣言識別子は引き続き検出。(3) 70+ green, clippy 0 件。 |
+| **見積サイズ** | S |
+| **依存** | PBI-09c (完了済み) |
 
 ---
 
@@ -192,8 +200,9 @@
 | PBI | タイトル | サイズ | 状態 |
 |-----|----------|--------|------|
 | PBI-09c | クロスモジュール diagnostics (undeclared 誤検出除外) | S | **Done** |
-| PBI-10 | For Each ループ変数 undeclared 誤検出除外 | S | Backlog |
-| PBI-11 | workbook-context.json シート名補完 | M | Backlog |
+| PBI-10 | For Each ループ変数 undeclared 誤検出除外 | S | **Won't Do** (already working) |
+| PBI-11 | workbook-context.json シート名補完 | M | Backlog (Not Ready) |
+| PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Ready** |
 
 ---
 
