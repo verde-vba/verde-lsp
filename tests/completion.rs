@@ -129,3 +129,47 @@ fn completion_includes_workbook_sheet_names() {
         "expected 'DataSheet' from workbook context in completions, got: {items:?}"
     );
 }
+
+#[test]
+fn completion_includes_workbook_table_names() {
+    let uri: Url = "file:///test.bas".parse().unwrap();
+    let src = "Sub Main()\nEnd Sub\n";
+    let host = AnalysisHost::new();
+    host.update(uri.clone(), src.to_string(), parser::parse(src));
+    host.set_workbook_context(WorkbookContext {
+        tables: vec!["SalesTable".to_string()],
+        ..Default::default()
+    });
+
+    let items: Vec<String> = completion::complete(&host, &uri, Position::new(0, 0))
+        .into_iter()
+        .map(|i| i.label)
+        .collect();
+
+    assert!(
+        items.iter().any(|s| s == "SalesTable"),
+        "expected 'SalesTable' from workbook tables in completions, got: {items:?}"
+    );
+}
+
+#[test]
+fn completion_includes_workbook_named_ranges() {
+    let uri: Url = "file:///test.bas".parse().unwrap();
+    let src = "Sub Main()\nEnd Sub\n";
+    let host = AnalysisHost::new();
+    host.update(uri.clone(), src.to_string(), parser::parse(src));
+    host.set_workbook_context(WorkbookContext {
+        named_ranges: vec!["MyRange".to_string()],
+        ..Default::default()
+    });
+
+    let items: Vec<String> = completion::complete(&host, &uri, Position::new(0, 0))
+        .into_iter()
+        .map(|i| i.label)
+        .collect();
+
+    assert!(
+        items.iter().any(|s| s == "MyRange"),
+        "expected 'MyRange' from workbook named_ranges in completions, got: {items:?}"
+    );
+}
