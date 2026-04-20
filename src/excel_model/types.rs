@@ -126,6 +126,29 @@ pub fn load_builtin_types() -> Vec<ExcelObjectType> {
     ]
 }
 
+/// Return the names of all Excel `Application` members (properties + methods).
+///
+/// These identifiers (e.g. `ActiveWorkbook`, `ActiveSheet`, `Range`, `Cells`,
+/// `Worksheets`, `Selection`) are exposed as implicit globals in VBA's Excel
+/// host, so they must be treated as "declared" under Option Explicit.
+///
+/// Returns an empty vector if the `Application` type is not present in the
+/// builtin type set (defensive; should not happen in practice).
+pub fn application_globals() -> Vec<String> {
+    let types = load_builtin_types();
+    let Some(app) = types.iter().find(|t| t.name == "Application") else {
+        return Vec::new();
+    };
+    let mut names = Vec::with_capacity(app.properties.len() + app.methods.len());
+    for p in &app.properties {
+        names.push(p.name.to_string());
+    }
+    for m in &app.methods {
+        names.push(m.name.to_string());
+    }
+    names
+}
+
 fn prop(name: &str, type_name: &str, readonly: bool) -> PropertyDef {
     PropertyDef {
         name: SmolStr::new(name),

@@ -130,3 +130,26 @@ fn does_not_warn_for_member_access_rhs_identifiers() {
             .join(", ")
     );
 }
+
+#[test]
+fn does_not_warn_on_for_each_with_declared_items() {
+    let source = "Option Explicit\n\nSub ProcessSheets()\n    Dim ws As Worksheet\n    For Each ws In ActiveWorkbook.Worksheets\n        ws.Cells(1, 1).Value = \"x\"\n    Next ws\nEnd Sub\n";
+    let uri: Url = "file:///test.bas".parse().unwrap();
+
+    let host = AnalysisHost::new();
+    let parse_result = parser::parse(source);
+    host.update(uri.clone(), source.to_string(), parse_result);
+
+    let diagnostics = host.diagnostics(&uri);
+
+    assert!(
+        diagnostics.is_empty(),
+        "expected zero diagnostics for For Each with declared loop variable, got {}: [{}]",
+        diagnostics.len(),
+        diagnostics
+            .iter()
+            .map(|d| format!("{:?}: {}", d.severity, d.message))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+}

@@ -114,6 +114,12 @@ pub fn check_option_explicit(
     for t in BUILTIN_TYPES {
         declared.insert(t.to_ascii_lowercase());
     }
+    // Excel `Application` members are VBA globals in the Excel host
+    // (e.g. `ActiveWorkbook`, `Range`, `Cells`, `Worksheets`), so they
+    // count as declared under Option Explicit.
+    for name in crate::excel_model::types::application_globals() {
+        declared.insert(name.to_ascii_lowercase());
+    }
 
     let tokens = lexer::lex(source);
     let mut diagnostics = Vec::new();
