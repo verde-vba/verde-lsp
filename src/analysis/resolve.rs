@@ -119,6 +119,42 @@ pub fn offset_to_position(source: &str, offset: usize) -> Position {
     Position::new(line, col)
 }
 
+/// Detect dot-access at cursor position.
+///
+/// Returns `(var_name, member_partial)` where `member_partial` is the
+/// identifier text from its start up to the cursor offset (may be empty
+/// directly after the dot, e.g. `f.` with cursor right after the dot).
+pub fn parse_dot_access_at(source: &str, cursor_offset: usize) -> Option<(SmolStr, SmolStr)> {
+    let bytes = source.as_bytes();
+
+    // Walk backward from cursor to the start of the current identifier token.
+    let mut member_start = cursor_offset;
+    while member_start > 0 && is_ident_char(bytes[member_start - 1]) {
+        member_start -= 1;
+    }
+
+    // The character immediately before the identifier must be `.`.
+    if member_start == 0 || bytes[member_start - 1] != b'.' {
+        return None;
+    }
+
+    let dot_pos = member_start - 1;
+    let member_partial = SmolStr::new(&source[member_start..cursor_offset]);
+
+    // Walk backward from the dot to find the variable identifier.
+    let mut var_start = dot_pos;
+    while var_start > 0 && is_ident_char(bytes[var_start - 1]) {
+        var_start -= 1;
+    }
+
+    if var_start == dot_pos {
+        return None; // nothing before dot
+    }
+
+    let var_name = SmolStr::new(&source[var_start..dot_pos]);
+    Some((var_name, member_partial))
+}
+
 fn is_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }

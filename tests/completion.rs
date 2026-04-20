@@ -163,6 +163,96 @@ fn completion_includes_workbook_table_names() {
 }
 
 #[test]
+// ── UDT dot-access completion (PBI-43) ───────────────────────────────────
+
+/// `f.` after `Dim f As MyType` should offer only MyType's members — no keywords/builtins.
+#[test]
+fn dot_access_prefix_triggers_udt_member_completion() {
+    // line 0: Type MyType
+    // line 1:     x As Long
+    // line 2:     name As String
+    // line 3: End Type
+    // line 4: Sub Test()
+    // line 5:     Dim f As MyType
+    // line 6:     f.        <- cursor col 6 (after dot)
+    // line 7: End Sub
+    let source =
+        "Type MyType\n    x As Long\n    name As String\nEnd Type\nSub Test()\n    Dim f As MyType\n    f.\nEnd Sub\n";
+    let items = do_complete_at(source, 6, 6);
+    let labels: Vec<&str> = items.iter().map(|(l, _, _)| l.as_str()).collect();
+    assert!(
+        labels.contains(&"x"),
+        "expected 'x' in dot-access completion, got: {labels:?}"
+    );
+    assert!(
+        labels.contains(&"name"),
+        "expected 'name' in dot-access completion, got: {labels:?}"
+    );
+    assert!(
+        !labels.contains(&"Dim"),
+        "keyword 'Dim' must not appear in dot-access completion, got: {labels:?}"
+    );
+}
+
+/// Module-level variable `x` must not leak into dot-access results for a different type.
+#[test]
+fn dot_access_filters_non_udt_symbols() {
+    // line 0: Dim x As Long      <- module var named 'x', should NOT appear
+    // line 1: Type MyType
+    // line 2:     y As Long      <- only UDT member should appear
+    // line 3: End Type
+    // line 4: Sub Test()
+    // line 5:     Dim f As MyType
+    // line 6:     f.             <- cursor col 6
+    // line 7: End Sub
+    let source =
+        "Dim x As Long\nType MyType\n    y As Long\nEnd Type\nSub Test()\n    Dim f As MyType\n    f.\nEnd Sub\n";
+    let items = do_complete_at(source, 6, 6);
+    let labels: Vec<&str> = items.iter().map(|(l, _, _)| l.as_str()).collect();
+    assert!(
+        labels.contains(&"y"),
+        "expected UDT member 'y' in dot-access completion, got: {labels:?}"
+    );
+    assert!(
+        !labels.contains(&"x"),
+        "module var 'x' must not appear in UDT dot-access, got: {labels:?}"
+    );
+}
+
+/// Dot-access on a variable whose type has no TypeDef must return empty.
+#[test]
+fn dot_access_unknown_type_returns_empty() {
+    // line 0: Sub Test()
+    // line 1:     Dim g As Unknown
+    // line 2:     g.             <- cursor col 6
+    // line 3: End Sub
+    let source = "Sub Test()\n    Dim g As Unknown\n    g.\nEnd Sub\n";
+    let items = do_complete_at(source, 2, 6);
+    assert!(
+        items.is_empty(),
+        "expected empty completion for unknown type dot-access, got: {items:?}"
+    );
+}
+
+/// Proc-scoped `Dim f As MyType` must also resolve dot-access members.
+#[test]
+fn dot_access_procedure_scoped_variable_resolves() {
+    // line 0: Type MyType
+    // line 1:     x As Long
+    // line 2: End Type
+    // line 3: Sub Test()
+    // line 4:     Dim f As MyType
+    // line 5:     f.             <- cursor col 6
+    // line 6: End Sub
+    let source = "Type MyType\n    x As Long\nEnd Type\nSub Test()\n    Dim f As MyType\n    f.\nEnd Sub\n";
+    let items = do_complete_at(source, 5, 6);
+    let labels: Vec<&str> = items.iter().map(|(l, _, _)| l.as_str()).collect();
+    assert!(
+        labels.contains(&"x"),
+        "expected 'x' from proc-scoped UDT variable, got: {labels:?}"
+    );
+}
+
 fn completion_includes_workbook_named_ranges() {
     let uri: Url = "file:///test.bas".parse().unwrap();
     let src = "Sub Main()\nEnd Sub\n";
