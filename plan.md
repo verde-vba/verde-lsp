@@ -1,32 +1,57 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-20 (Sprint N+10 バックログリファインメント完了)
-> 現在ブランチ: main (最新: d32a276)
-> テスト基準: 63 green (lib 36 + integration 27), cargo clippy -D warnings 0 件
+> 最終更新: 2026-04-21 (Sprint N+10 完了)
+> 現在ブランチ: main
+> テスト基準: 64 green (lib 36 + integration 28), cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+10)
+## 次 Sprint 推奨 (Sprint N+11)
 
-**Sprint Goal**: PBI-09a を完遂し、クロスモジュール補完の MVP を届ける
+**Sprint Goal**: PBI-09b を完遂し、クロスモジュール hover/goto-def を届ける
 
-### PBI-09a — クロスモジュール補完 MVP (Small) ✅ Ready
+### PBI-09b — クロスモジュール hover / go-to-definition (Small) ✅ Ready
 
 | 項目 | 内容 |
 |------|------|
-| **目的** | 同一ワークスペース内の別ファイルに定義された `Public Sub/Function/変数` を補完候補に含める。 |
-| **背景** | `AnalysisHost.files` は既に `DashMap<Url, FileAnalysis>` — ワークスペース管理の骨格は完備。`all_public_symbols()` 集約メソッドを追加し `complete()` に繋げるだけで実現できる。 |
-| **受入基準** | (1) ファイル A の `Public Sub Foo()` がファイル B での補完候補に出る。(2) `cargo test` 64+ green, clippy 0 件 |
-| **実装方針** | `AnalysisHost` に `all_public_symbols() -> Vec<&Symbol>` を追加（全ファイルを iterate し `Visibility::Public` なシンボルを集約）→ `complete()` で現ファイルのスコープフィルタ後に Public シンボルを末尾追加 → 2 ファイルシナリオの統合テスト 1 件 |
+| **目的** | `hover()` と `go_to_definition()` で他モジュールの Public シンボルを参照できるようにする。 |
+| **背景** | PBI-09a でクロスモジュール補完を実装。`all_public_symbols_from_other_files()` が既存のため hover/definition への拡張は小規模。 |
+| **受入基準** | (1) モジュール A の `Public Sub Foo()` にモジュール B から hover すると型情報が表示される。(2) go-to-definition でモジュール A の定義箇所に飛べる。(3) `cargo test` 65+ green, clippy 0 件 |
 | **見積サイズ** | S |
-| **依存** | なし |
-
-### 事前 Tidy (Sprint N+10 開始前に 1 コミット)
-
-`symbols.rs:197` の `let _ = value;` を `let _value = value;` にリネーム。  
-EnumMember の `Option<i64>` 値は将来使う意図で存在するが、`let _` は「完全に捨てる」という誤読を招く。1 行・動作変更なし。
+| **依存** | PBI-09a (完了済み) |
 
 ---
+
+## Sprint N+10 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-09a クロスモジュール補完 MVP を届ける」を完全達成。
+
+### KPT
+
+#### Keep
+- `AnalysisHost.files` が既に `DashMap<Url, FileAnalysis>` であることをリファインメント段階で確認し、Large → Small への見積修正が正確だった。
+- `proc_scope.is_none()` フィルタでモジュールレベルの Public シンボルのみを横断対象にする設計判断が明快。
+- TDD サイクル: RED test → GREEN (all_public_symbols_from_other_files) → REFACTOR (symbol_kind_to_completion_kind 抽出) → Tidy After (_value デストラクチャ化) の 4 コミット構成が整然としていた。
+
+#### Problem
+- `symbol_kind_to_completion_kind` の match ブロックが一時的に 2 箇所に存在した (Phase 4 → Phase 5 で解消)。GREEN フェーズで最初からヘルパーを意識すれば 1 コミット削減できた。
+
+#### Try
+- GREEN 実装時に既存の match/map パターンを再利用するか、即座にヘルパー化するかを意識する。
+
+---
+
+## 完了済み (Sprint N+10)
+
+| コミット | 内容 |
+|----------|------|
+| `c15d5ea` | refactor: let _value で EnumMember 値を明示的に未使用とマーク (Tidy First) |
+| `1fa0c8e` | test: completion_includes_public_symbols_from_other_files (RED) |
+| `9628f1a` | feat: クロスモジュール補完 — all_public_symbols_from_other_files + complete() 連結 (PBI-09a) |
+| `3e474f6` | refactor: symbol_kind_to_completion_kind ヘルパー抽出で重複除去 |
+| `b19e09e` | refactor: _value をデストラクチャパターンに移動し dead statement 除去 |
 
 ---
 
@@ -96,7 +121,7 @@ EnumMember の `Option<i64>` 値は将来使う意図で存在するが、`let _
 
 | PBI | タイトル | サイズ | 状態 |
 |-----|----------|--------|------|
-| PBI-09a | クロスモジュール補完 MVP | S | **Ready** |
+| PBI-09b | クロスモジュール hover / go-to-definition | S | **Ready** |
 
 ---
 
