@@ -1,25 +1,14 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+15 完了)
+> 最終更新: 2026-04-21 (Sprint N+16 完了)
 > 現在ブランチ: main
-> テスト基準: 73 green (lib 36 + integration 37), cargo clippy -D warnings 0 件
+> テスト基準: 75 green (lib 36 + integration 39), cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+16)
+## 次 Sprint 推奨 (Sprint N+17)
 
-**Sprint Goal**: PBI-14 を完遂し、workbook-context.json の変更を LSP 再起動なしに反映する
-
-### PBI-14 — workbook-context.json 自動再読み込み (didChangeWatchedFiles 対応) (S) ✅ Ready
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | `workbook-context.json` が更新されたとき LSP を再起動せずに補完候補を更新する。 |
-| **背景** | PBI-11/13 で初回ロードは実装。`workspace/didChangeWatchedFiles` を使い file watch 登録 + 再ロードを追加する。 |
-| **実装方針** | (1) `AnalysisHost::reload_workbook_context_from_path(path)` ヘルパーを抽出（テスト可能単位）。(2) `VbaLanguageServer::initialized` でこのヘルパーを使うよう既存ロジックをリファクタ。(3) `initialized` で file watcher を `DidChangeWatchedFilesRegistrationOptions` で登録。(4) `did_change_watched_files` ハンドラを実装。 |
-| **受入基準** | `reload_workbook_context_from_path` が正しくロードすること (unit test)。74+ green, clippy 0。 |
-| **見積サイズ** | S |
-| **依存** | PBI-11 (完了済み) |
+**Sprint Goal 候補**: 新規 PBI が Refinement 後に Ready になり次第実行
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -69,6 +58,36 @@
 
 #### Try
 - `check_option_explicit` の引数が 5 個を超えた時点で `DiagnosticsContext` 構造体を導入する。
+
+---
+
+## Sprint N+16 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-14 workbook-context.json 自動再読み込み」を完全達成。
+
+### KPT
+
+#### Keep
+- `reload_workbook_context_from_path` を同期ヘルパーに統一したことで `initialized` の `tokio::fs::read_to_string` + `.await` が不要になり、`RwLockReadGuard` 問題も回避できた。
+- `register_capability(vec![...])` が `RegistrationParams` wrapper 不要だと API 確認で即発見。コンパイルエラー 1 回で解決。
+
+#### Problem
+- `did_change_watched_files` ハンドラのサーバー統合テストは未実装。`reload_workbook_context_from_path` の単体テストのみ。
+
+#### Try
+- サーバー統合テストが必要な場合は mock client を使う tower-lsp のテストユーティリティを調査する。
+
+---
+
+## 完了済み (Sprint N+16)
+
+| コミット | 内容 |
+|----------|------|
+| `b664801` | docs(scrum): PBI-14 Refinement |
+| `e434b2d` | test: reload_workbook_context_from_path RED テスト (PBI-14) |
+| `6f59b1a` | feat: workbook-context.json 自動再読み込み — reload_workbook_context_from_path + didChangeWatchedFiles (PBI-14) |
 
 ---
 
@@ -306,7 +325,7 @@
 | PBI-10 | For Each ループ変数 undeclared 誤検出除外 | S | **Won't Do** (already working) |
 | PBI-11 | workbook-context.json シート名補完 | M | **Done** |
 | PBI-13 | workbook-context.json tables/named_ranges 補完拡張 | XS | **Done** |
-| PBI-14 | workbook-context.json 自動再読み込み (didChangeWatchedFiles) | S | **Ready** |
+| PBI-14 | workbook-context.json 自動再読み込み (didChangeWatchedFiles) | S | **Done** |
 | PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
