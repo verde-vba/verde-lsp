@@ -107,6 +107,27 @@ fn hover_parameter_in_first_proc_shows_its_type() {
 }
 
 #[test]
+/// Hovering on `x` in `f.x` must show the UDT member's type annotation.
+#[test]
+fn hover_on_udt_member_access_shows_type() {
+    // line 0: Type MyType
+    // line 1:     x As Long
+    // line 2: End Type
+    // line 3: Sub Test()
+    // line 4:     Dim f As MyType
+    // line 5:     f.x               <- cursor on 'x', col 6
+    // line 6: End Sub
+    let source =
+        "Type MyType\n    x As Long\nEnd Type\nSub Test()\n    Dim f As MyType\n    f.x\nEnd Sub\n";
+    let position = Position::new(5, 6); // on 'x' in 'f.x'
+    let content =
+        do_hover(source, position).expect("expected hover result for UDT member access");
+    assert!(
+        content.contains("x") && content.contains("Long"),
+        "expected hover to show 'x As Long', got: {content:?}"
+    );
+}
+
 fn hover_parameter_in_second_proc_shows_its_type() {
     let source =
         "Sub A(x As Integer)\n    x = 1\nEnd Sub\nSub B(x As String)\n    x = \"hi\"\nEnd Sub\n";
