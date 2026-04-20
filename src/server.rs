@@ -36,6 +36,22 @@ impl VbaLanguageServer {
     }
 }
 
+fn server_capabilities() -> ServerCapabilities {
+    ServerCapabilities {
+        text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
+        completion_provider: Some(CompletionOptions {
+            trigger_characters: Some(vec![".".to_string()]),
+            ..Default::default()
+        }),
+        hover_provider: Some(HoverProviderCapability::Simple(true)),
+        definition_provider: Some(OneOf::Left(true)),
+        rename_provider: Some(OneOf::Left(true)),
+        references_provider: Some(OneOf::Left(true)),
+        document_symbol_provider: Some(OneOf::Left(true)),
+        ..Default::default()
+    }
+}
+
 #[tower_lsp::async_trait]
 impl LanguageServer for VbaLanguageServer {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
@@ -46,21 +62,7 @@ impl LanguageServer for VbaLanguageServer {
         *self.root_uri.write().unwrap() = root;
 
         Ok(InitializeResult {
-            capabilities: ServerCapabilities {
-                text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                    TextDocumentSyncKind::FULL,
-                )),
-                completion_provider: Some(CompletionOptions {
-                    trigger_characters: Some(vec![".".to_string()]),
-                    ..Default::default()
-                }),
-                hover_provider: Some(HoverProviderCapability::Simple(true)),
-                definition_provider: Some(OneOf::Left(true)),
-                rename_provider: Some(OneOf::Left(true)),
-                references_provider: Some(OneOf::Left(true)),
-                document_symbol_provider: Some(OneOf::Left(true)),
-                ..Default::default()
-            },
+            capabilities: server_capabilities(),
             ..Default::default()
         })
     }
