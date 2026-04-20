@@ -1,25 +1,14 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+19 完了)
+> 最終更新: 2026-04-21 (Sprint N+20 完了)
 > 現在ブランチ: main
-> テスト基準: 81 green (lib 36 + integration 45), cargo clippy -D warnings 0 件
+> テスト基準: 83 green (lib 36 + integration 47), cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+20)
+## 次 Sprint 推奨 (Sprint N+21)
 
-**Sprint Goal**: PBI-18 を完遂し、rename を他ファイルの call site から起動可能にする
-
-### PBI-18 — rename guard cross-module フォールバック (S) ✅ Ready
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | `rename` の guard が現在ファイルにシンボルが見つからない場合、他ファイルの Public シンボルを確認するフォールバックを追加し、他ファイルの call site からも rename を起動可能にする。 |
-| **背景** | PBI-17 で全ファイル検索は実装済み。しかし `find_symbol_by_name(symbols, &word).is_empty()` が空の場合は None を返す。他ファイルの call site (例: ModuleB で `Foo` を呼ぶ行) でも rename できるべき。 |
-| **実装方針** | `find_symbol_by_name` が空のとき `host.find_public_symbol_in_other_files(uri, &word)` でフォールバック確認。いずれかで見つかれば rename を実行する。 |
-| **受入基準** | (1) call site ファイル (ModuleB) のカーソルから rename を起動しても WorkspaceEdit が返る。(2) 83+ green, clippy 0。 |
-| **見積サイズ** | S |
-| **依存** | PBI-17 (完了済み) |
+**Sprint Goal 候補**: 新規 PBI を Refinement 後に実行
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -69,6 +58,36 @@
 
 #### Try
 - `check_option_explicit` の引数が 5 個を超えた時点で `DiagnosticsContext` 構造体を導入する。
+
+---
+
+## Sprint N+20 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-18 rename guard cross-module フォールバック」を完全達成。
+
+### KPT
+
+#### Keep
+- `found_locally || found_cross` のシンプルな論理和で guard 拡張。6 行の変更でテスト通過。
+- PBI-16 → PBI-17 → PBI-18 と小さな incremental 拡張を重ねた結果、クロスモジュール LSP 機能 (completion/hover/goto-def/diagnostics/references/rename) が全て揃った。
+
+#### Problem
+- guard の cross-module チェックが `find_public_symbol_in_other_files` (Public シンボルのみ) に限定されている。Private シンボルの cross-file rename は未対応。
+
+#### Try
+- Private シンボルが cross-file で参照されることは VBA では稀なので、現時点では許容範囲と判断。
+
+---
+
+## 完了済み (Sprint N+20)
+
+| コミット | 内容 |
+|----------|------|
+| `603865b` | docs(scrum): PBI-18 Refinement |
+| `45850b8` | test: rename call site から起動の RED テスト (PBI-18) |
+| `4cd1d60` | feat: rename guard に cross-module フォールバック追加 (PBI-18) |
 
 ---
 
@@ -430,7 +449,7 @@
 | PBI-15 | textDocument/references プロバイダ実装 | XS | **Done** |
 | PBI-16 | textDocument/references クロスファイル拡張 | S | **Done** |
 | PBI-17 | textDocument/rename クロスファイル拡張 | S | **Done** |
-| PBI-18 | rename guard cross-module フォールバック | S | **Ready** |
+| PBI-18 | rename guard cross-module フォールバック | S | **Done** |
 | PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
