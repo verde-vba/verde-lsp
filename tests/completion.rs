@@ -78,3 +78,29 @@ fn completion_param_visible_in_own_proc_only() {
     let found_b = items_b.iter().find(|(label, _, _)| label == "p");
     assert!(found_b.is_none(), "expected param 'p' NOT visible inside Sub B");
 }
+
+#[test]
+fn completion_includes_public_symbols_from_other_files() {
+    // File A defines a Public Sub
+    let uri_a: Url = "file:///module_a.bas".parse().unwrap();
+    let source_a = "Public Sub Foo()\nEnd Sub\n";
+    let host = AnalysisHost::new();
+    host.update(uri_a, source_a.to_string(), parser::parse(source_a));
+
+    // File B is a separate module
+    let uri_b: Url = "file:///module_b.bas".parse().unwrap();
+    let source_b = "\n";
+    host.update(uri_b.clone(), source_b.to_string(), parser::parse(source_b));
+
+    // Completing in file B should surface Foo from file A
+    let items: Vec<String> = completion::complete(&host, &uri_b, Position::new(0, 0))
+        .into_iter()
+        .map(|item| item.label)
+        .collect();
+
+    assert!(
+        items.iter().any(|s| s == "Foo"),
+        "expected 'Foo' from module_a in completion candidates for module_b, got: {:?}",
+        items
+    );
+}
