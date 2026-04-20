@@ -8,7 +8,18 @@
 
 ## 次 Sprint 推奨 (Sprint N+20)
 
-**Sprint Goal 候補**: 新規 PBI を Refinement 後に実行
+**Sprint Goal**: PBI-18 を完遂し、rename を他ファイルの call site から起動可能にする
+
+### PBI-18 — rename guard cross-module フォールバック (S) ✅ Ready
+
+| 項目 | 内容 |
+|------|------|
+| **目的** | `rename` の guard が現在ファイルにシンボルが見つからない場合、他ファイルの Public シンボルを確認するフォールバックを追加し、他ファイルの call site からも rename を起動可能にする。 |
+| **背景** | PBI-17 で全ファイル検索は実装済み。しかし `find_symbol_by_name(symbols, &word).is_empty()` が空の場合は None を返す。他ファイルの call site (例: ModuleB で `Foo` を呼ぶ行) でも rename できるべき。 |
+| **実装方針** | `find_symbol_by_name` が空のとき `host.find_public_symbol_in_other_files(uri, &word)` でフォールバック確認。いずれかで見つかれば rename を実行する。 |
+| **受入基準** | (1) call site ファイル (ModuleB) のカーソルから rename を起動しても WorkspaceEdit が返る。(2) 83+ green, clippy 0。 |
+| **見積サイズ** | S |
+| **依存** | PBI-17 (完了済み) |
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -419,6 +430,7 @@
 | PBI-15 | textDocument/references プロバイダ実装 | XS | **Done** |
 | PBI-16 | textDocument/references クロスファイル拡張 | S | **Done** |
 | PBI-17 | textDocument/rename クロスファイル拡張 | S | **Done** |
+| PBI-18 | rename guard cross-module フォールバック | S | **Ready** |
 | PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
