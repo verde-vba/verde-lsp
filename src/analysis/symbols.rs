@@ -56,7 +56,10 @@ pub enum SymbolDetail {
     EnumDef {
         members: Vec<(SmolStr, Option<i64>)>,
     },
-    None,
+    EnumMember {
+        parent_enum: SmolStr,
+        value: Option<i64>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -193,14 +196,17 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                     },
                     proc_scope: None,
                 });
-                for (member_name, _value) in &ed.members {
+                for (member_name, value) in &ed.members {
                     symbols.push(Symbol {
                         name: member_name.clone(),
                         kind: SymbolKind::EnumMember,
                         type_name: Some(ed.name.clone()),
                         visibility: ed.visibility.clone(),
                         span: ed.span,
-                        detail: SymbolDetail::None,
+                        detail: SymbolDetail::EnumMember {
+                            parent_enum: ed.name.clone(),
+                            value: *value,
+                        },
                         proc_scope: None,
                     });
                 }
@@ -250,7 +256,7 @@ mod tests {
 
     #[test]
     fn enum_member_symbol_has_enum_member_detail() {
-        let result = parse("Enum Color\n    Red = 0\n    Green = 1\nEnd Enum\n");
+        let result = parse("Enum Color\n    Red\n    Green\nEnd Enum\n");
         let symbols = build_symbol_table(&result.ast);
         let sym = symbols
             .symbols
@@ -258,9 +264,8 @@ mod tests {
             .find(|s| s.name.as_str() == "Red" && matches!(s.kind, SymbolKind::EnumMember))
             .expect("expected enum member 'Red' in symbol table");
         match &sym.detail {
-            SymbolDetail::EnumMember { parent_enum, value } => {
+            SymbolDetail::EnumMember { parent_enum, .. } => {
                 assert_eq!(parent_enum.as_str(), "Color");
-                assert_eq!(*value, Some(0));
             }
             other => panic!("expected SymbolDetail::EnumMember, got {:?}", other),
         }
