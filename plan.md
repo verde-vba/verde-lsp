@@ -1,8 +1,8 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+46 完了 — PBI-43 完結 dot-access + completion/hover/goto-def)
+> 最終更新: 2026-04-21 (Sprint N+47 完了 — PBI-44 Me. 補完 + .cls ヘッダー検証)
 > 現在ブランチ: main
-> テスト基準: 136 green (lib 53 + integration 83), cargo clippy -D warnings 0 件
+> テスト基準: 143 green (lib 55 + integration 88), cargo clippy -D warnings 0 件
 
 ---
 
@@ -113,7 +113,7 @@
 | PBI-41 | `workbook-context.json` 書き出し経路検証 | XS | **Done (Sprint N+43)** — tests/workbook.rs 既存カバレッジで完了 |
 | PBI-42 | ログ出力方針統一 (`env_logger` → stderr) | XS | **Done (Sprint N+43)** |
 | PBI-43 | UDT メンバー解決 (`foo.bar` completion/hover) | L | **Done (Sprint N+46)** |
-| PBI-44 | Class module (`.cls`) サポート | L | Backlog (Phase 3) |
+| PBI-44 | Class module (`.cls`) サポート | L | **Done (Sprint N+47)** |
 | PBI-45 | Excel Object Model 拡充 (PivotTable/Chart/Shape) | M | Backlog (Phase 3) |
 | PBI-46 | `textDocument/formatting` — indent/case 正規化 | M | Backlog (Phase 4) |
 | PBI-47 | Extract Sub/Function リファクタ (code action) | L | Backlog (Phase 4) |
@@ -173,6 +173,7 @@
 | N+44 | PBI-40 | Verde stdio 起動 E2E テスト / Phase 2 完結 |
 | N+45 | PBI-43 (partial) | Type ブロック parser 実装 + UdtMember シンボル登録 (Parser/SymbolTable 層) |
 | N+46 | PBI-43 (完結) | dot-access 補完 / hover / goto-def 実装 — PBI-43 全完了 |
+| N+47 | PBI-44 | Me. dot-access 補完 + .cls ヘッダー検証 — PBI-44 完了 |
 
 ---
 
@@ -344,6 +345,16 @@ PBI-43 を完全達成。Tidy First 2 件 (TypeDefNode.members に per-member sp
 3. 型名 `MyType` → `SymbolKind::UdtMember` かつ `proc_scope == None` なシンボルをフィルタ
 4. hover: `f.x` の dot-access を解析して `UdtMember` シンボルを返す
 5. goto-def: `UdtMember.span` を `TypeDefNode.span` と紐付ける (現状は TypeDef 全体 span のみ)
+
+---
+
+## Sprint N+47 レトロスペクティブ (PBI-44 — Me. 補完 / .cls ヘッダー検証)
+
+PBI-44 を完全達成。`complete_dot_access` に `Me` 特殊ケースを追加し、`Me.` でカレントモジュールの module-level シンボル (Procedure/Function/Property/Variable/Constant) を補完候補として返す。`.cls` ヘッダー (`VERSION 1.0 CLASS` / `BEGIN`/`END`) は既存の unknown-token スキップ機構で既に処理されていることをパーステストで文書化。hover/goto-def は `find_word_at_position` が `Me.` プレフィックスを自動除外するため実装変更ゼロで動作確認。136 → 143 green (新規 7) / clippy 0 / fmt pass。
+
+**Keep**: `parse_dot_access_at` の `(var_name, partial)` インタフェースが `Me` 特殊ケースの追加点として機能した / テスト → 実装 → 全 suite の TDD 順守
+**Problem**: `.cls` ヘッダーの `END` (単体) が `EndSub` 等の複合トークンと競合する可能性を事前確認すべきだった (実際は問題なし)
+**Try**: PBI-45 (Excel Object Model 拡充) または PBI-46 (formatting) を次 Sprint に
 
 ---
 
