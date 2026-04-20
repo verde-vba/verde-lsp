@@ -113,6 +113,7 @@ fn completion_includes_workbook_sheet_names() {
     host.update(uri.clone(), src.to_string(), parser::parse(src));
     host.set_workbook_context(WorkbookContext {
         sheets: vec!["Sheet1".to_string(), "DataSheet".to_string()],
+        ..Default::default()
     });
 
     let items: Vec<String> = completion::complete(&host, &uri, Position::new(0, 0))

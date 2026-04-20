@@ -87,6 +87,24 @@ pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<Compl
         });
     }
 
+    for table in host.workbook_tables() {
+        items.push(CompletionItem {
+            label: table,
+            kind: Some(CompletionItemKind::STRUCT),
+            detail: Some("Table".to_string()),
+            ..Default::default()
+        });
+    }
+
+    for named_range in host.workbook_named_ranges() {
+        items.push(CompletionItem {
+            label: named_range,
+            kind: Some(CompletionItemKind::CONSTANT),
+            detail: Some("Named Range".to_string()),
+            ..Default::default()
+        });
+    }
+
     items
 }
 

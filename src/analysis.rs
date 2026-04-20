@@ -14,6 +14,10 @@ use symbols::SymbolTable;
 pub struct WorkbookContext {
     #[serde(default)]
     pub sheets: Vec<String>,
+    #[serde(default)]
+    pub tables: Vec<String>,
+    #[serde(default)]
+    pub named_ranges: Vec<String>,
 }
 
 pub struct AnalysisHost {
@@ -47,6 +51,14 @@ impl AnalysisHost {
 
     pub fn workbook_sheets(&self) -> Vec<String> {
         self.workbook_context.read().unwrap().sheets.clone()
+    }
+
+    pub fn workbook_tables(&self) -> Vec<String> {
+        self.workbook_context.read().unwrap().tables.clone()
+    }
+
+    pub fn workbook_named_ranges(&self) -> Vec<String> {
+        self.workbook_context.read().unwrap().named_ranges.clone()
     }
 
     pub fn update(&self, uri: Url, source: String, parse_result: ParseResult) {
