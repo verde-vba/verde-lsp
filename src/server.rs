@@ -3,7 +3,7 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
-use crate::analysis::{AnalysisHost, WorkbookContext};
+use crate::analysis::AnalysisHost;
 use crate::parser;
 
 pub struct VbaLanguageServer {
@@ -64,21 +64,46 @@ impl LanguageServer for VbaLanguageServer {
     }
 
     async fn initialized(&self, _: InitializedParams) {
-        // Clone before .await to avoid holding RwLockReadGuard across await point.
+        // Clone before awaiting to drop the RwLockReadGuard first.
         let root = self.root_uri.read().unwrap().clone();
         if let Some(root) = root {
-            if let Ok(path) = root.to_file_path() {
-                let json_path = path.join("workbook-context.json");
-                if let Ok(content) = tokio::fs::read_to_string(&json_path).await {
-                    if let Ok(ctx) = serde_json::from_str::<WorkbookContext>(&content) {
-                        self.analysis.set_workbook_context(ctx);
-                    }
-                }
+            if let Ok(base) = root.to_file_path() {
+                self.analysis
+                    .reload_workbook_context_from_path(&base.join("workbook-context.json"));
             }
+            // Register a file watcher so clients notify us when workbook-context.json changes.
+            let _ = self
+                .client
+                .register_capability(vec![Registration {
+                    id: "workbook-context-watcher".to_string(),
+                    method: "workspace/didChangeWatchedFiles".to_string(),
+                    register_options: serde_json::to_value(
+                        DidChangeWatchedFilesRegistrationOptions {
+                            watchers: vec![FileSystemWatcher {
+                                glob_pattern: GlobPattern::String(
+                                    "**/workbook-context.json".to_string(),
+                                ),
+                                kind: None,
+                            }],
+                        },
+                    )
+                    .ok(),
+                }])
+                .await;
         }
         self.client
             .log_message(MessageType::INFO, "verde-lsp initialized")
             .await;
+    }
+
+    async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
+        for change in &params.changes {
+            if change.uri.path().ends_with("workbook-context.json") {
+                if let Ok(path) = change.uri.to_file_path() {
+                    self.analysis.reload_workbook_context_from_path(&path);
+                }
+            }
+        }
     }
 
     async fn shutdown(&self) -> Result<()> {

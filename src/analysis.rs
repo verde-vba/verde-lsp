@@ -49,6 +49,18 @@ impl AnalysisHost {
         *self.workbook_context.write().unwrap() = ctx;
     }
 
+    /// Read `path`, parse as `WorkbookContext` JSON, and update the context.
+    /// Returns `true` on success, `false` if the file is missing or invalid.
+    pub fn reload_workbook_context_from_path(&self, path: &std::path::Path) -> bool {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if let Ok(ctx) = serde_json::from_str::<WorkbookContext>(&content) {
+                self.set_workbook_context(ctx);
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn workbook_sheets(&self) -> Vec<String> {
         self.workbook_context.read().unwrap().sheets.clone()
     }
