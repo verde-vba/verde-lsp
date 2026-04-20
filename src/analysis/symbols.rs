@@ -247,4 +247,22 @@ mod tests {
             sym.detail
         );
     }
+
+    #[test]
+    fn enum_member_symbol_has_enum_member_detail() {
+        let result = parse("Enum Color\n    Red = 0\n    Green = 1\nEnd Enum\n");
+        let symbols = build_symbol_table(&result.ast);
+        let sym = symbols
+            .symbols
+            .iter()
+            .find(|s| s.name.as_str() == "Red" && matches!(s.kind, SymbolKind::EnumMember))
+            .expect("expected enum member 'Red' in symbol table");
+        match &sym.detail {
+            SymbolDetail::EnumMember { parent_enum, value } => {
+                assert_eq!(parent_enum.as_str(), "Color");
+                assert_eq!(*value, Some(0));
+            }
+            other => panic!("expected SymbolDetail::EnumMember, got {:?}", other),
+        }
+    }
 }
