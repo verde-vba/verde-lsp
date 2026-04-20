@@ -761,20 +761,41 @@ impl<'a> Parser<'a> {
     }
 
     /// After consuming an enum member identifier, optionally read `= <integer-literal>`.
-    /// Returns None for missing `=`, non-integer expressions, hex literals, negatives, or
-    /// anything that doesn't parse as `i64` — keeping the MVP scope minimal.
+    /// Supports decimal literals (`= 1`), negative decimals (`= -1`), and hex literals
+    /// (`= &H10`). Returns None for missing `=`, other expressions, or parse failure.
     fn try_parse_enum_member_value(&mut self) -> Option<i64> {
         if !matches!(self.peek(), Some(t) if t.token == Token::Eq) {
             return None;
         }
         self.pos += 1;
-        let tok = self.peek()?;
-        if tok.token != Token::NumberLiteral {
-            return None;
+        match self.peek()?.token {
+            Token::NumberLiteral => {
+                let tok = self.peek()?;
+                let parsed = tok.text.parse::<i64>().ok();
+                self.pos += 1;
+                parsed
+            }
+            Token::Minus => {
+                self.pos += 1;
+                let tok = self.peek()?;
+                if tok.token != Token::NumberLiteral {
+                    return None;
+                }
+                let parsed = tok.text.parse::<i64>().ok().map(|v| -v);
+                self.pos += 1;
+                parsed
+            }
+            Token::HexLiteral => {
+                let tok = self.peek()?;
+                let text = &tok.text;
+                let without_prefix = text.get(2..)?;
+                let hex_str = without_prefix.strip_suffix('&').unwrap_or(without_prefix);
+                let parsed = i64::from_str_radix(hex_str, 16).ok();
+                self.pos += 1;
+                parsed
+            }
+            _ => None,
         }
-        let parsed = tok.text.parse::<i64>().ok();
-        self.pos += 1;
-        parsed
     }
 
     fn parse_enum_def(&mut self, visibility: Visibility) {
