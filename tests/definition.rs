@@ -57,3 +57,39 @@ fn goto_definition_from_local_variable_usage_jumps_to_dim() {
     assert_eq!(def.line, 1, "expected definition on line 1 (Dim x), got {}", def.line);
     assert_eq!(def.character, 8, "expected col 8 ('x' in Dim), got {}", def.character);
 }
+
+#[test]
+fn goto_definition_crosses_module_boundary() {
+    // File A defines Public Sub Foo
+    let uri_a: Url = "file:///module_a.bas".parse().unwrap();
+    let source_a = "Public Sub Foo()\nEnd Sub\n";
+    let host = AnalysisHost::new();
+    host.update(uri_a.clone(), source_a.to_string(), parser::parse(source_a));
+
+    // File B calls Foo
+    let uri_b: Url = "file:///module_b.bas".parse().unwrap();
+    let source_b = "Sub Bar()\n    Call Foo\nEnd Sub\n";
+    host.update(uri_b.clone(), source_b.to_string(), parser::parse(source_b));
+
+    // goto_definition from "Foo" in file B (line 1, col 9)
+    let resp = definition::goto_definition(&host, &uri_b, Position::new(1, 9));
+    assert!(
+        resp.is_some(),
+        "expected goto_definition result for cross-module 'Foo', got None"
+    );
+    match resp.unwrap() {
+        tower_lsp::lsp_types::GotoDefinitionResponse::Scalar(loc) => {
+            assert_eq!(
+                loc.uri, uri_a,
+                "expected definition to point to module_a.bas, got {:?}",
+                loc.uri
+            );
+            assert_eq!(
+                loc.range.start.line, 0,
+                "expected definition on line 0 of module_a, got {}",
+                loc.range.start.line
+            );
+        }
+        _ => panic!("expected scalar goto_definition response"),
+    }
+}
