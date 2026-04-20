@@ -1,15 +1,15 @@
 # verde-lsp バックログ
 
 > 最終更新: 2026-04-20  
-> 現在ブランチ: main (最新: 89af46c)  
-> テスト基準: 63 green, cargo clippy -D warnings 0 件
+> 現在ブランチ: main (最新: 1525c2e)  
+> テスト基準: 66 green, cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+6)
+## 次 Sprint 推奨 (Sprint N+7)
 
-**新規 PBI を検討** — PBI-01〜05b 完了により診断・ナビ・補完の基盤が整った。  
-候補: (A) Exit / GoTo / On Error 等の残りキーワード StatementNode 化、(B) rename の全識別子 WorkspaceEdit 精度向上、(C) シンボルスコープ（手続き境界）を考慮した completion フィルタリング。
+**新規 PBI を検討** — PBI-06 完了により Exit/GoTo/On Error の誤検知が解消。  
+候補: (B) rename の全識別子 WorkspaceEdit 精度向上、(C) シンボルスコープ（手続き境界）を考慮した completion フィルタリング。
 
 ---
 
@@ -64,6 +64,18 @@
 ---
 
 ~~**PBI-05b** — Do / ReDim StatementNode 化 → Sprint N+5 完了~~
+
+---
+
+## 完了済み (Sprint N+6)
+
+| コミット | 内容 |
+|----------|------|
+| `4bb8c62` | refactor: ExitStatementNode / GoToStatementNode / OnErrorStatementNode 追加 (Tidy First) |
+| `f52f25b` | feat: Exit Sub/Function/For/Do → StatementNode::Exit |
+| `53ac2dd` | feat: GoTo → StatementNode::GoTo |
+| `1f48120` | feat: On Error → StatementNode::OnError |
+| `1525c2e` | refactor: classify_and_parse_statement doc comment 更新 |
 
 ---
 
