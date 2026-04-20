@@ -14,13 +14,19 @@ pub struct Ast {
     pub option_explicit: bool,
 }
 
-impl Ast {
-    pub fn new() -> Self {
+impl Default for Ast {
+    fn default() -> Self {
         Self {
             nodes: Arena::new(),
             root: Vec::new(),
             option_explicit: false,
         }
+    }
+}
+
+impl Ast {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -67,17 +73,12 @@ pub enum ProcedureKind {
     PropertySet,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum Visibility {
+    #[default]
     Public,
     Private,
     Friend,
-}
-
-impl Default for Visibility {
-    fn default() -> Self {
-        Visibility::Public
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -100,16 +101,11 @@ pub struct ParameterNode {
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum ParameterPassing {
+    #[default]
     ByRef,
     ByVal,
-}
-
-impl Default for ParameterPassing {
-    fn default() -> Self {
-        ParameterPassing::ByRef
-    }
 }
 
 #[derive(Debug, Clone)]
