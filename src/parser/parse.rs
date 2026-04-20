@@ -267,21 +267,8 @@ impl<'a> Parser<'a> {
                     self.ast.root.push(id);
                     return;
                 }
-                Some(t) => {
-                    let decl_kind = match t.token {
-                        Token::Dim => Some(DeclKind::Dim),
-                        Token::Static => Some(DeclKind::Static),
-                        Token::Const => Some(DeclKind::Const),
-                        Token::ReDim => Some(DeclKind::ReDim),
-                        _ => None,
-                    };
-                    let stmt_node = if let Some(kind) = decl_kind {
-                        let decl = self.parse_local_declaration(kind);
-                        AstNode::Statement(StatementNode::LocalDeclaration(decl))
-                    } else {
-                        let expr = self.parse_expression_statement();
-                        AstNode::Statement(StatementNode::Expression(expr))
-                    };
+                Some(_) => {
+                    let stmt_node = self.classify_and_parse_statement();
                     let id = self.ast.nodes.alloc(stmt_node);
                     body.push(id);
                 }
@@ -551,6 +538,28 @@ impl<'a> Parser<'a> {
             kind,
             names,
             span: TextRange::new(start_offset, end_offset),
+        }
+    }
+
+    /// Dispatch to the appropriate per-statement parser based on the current
+    /// leading token. Declaration keywords (Dim/Static/Const/ReDim) produce a
+    /// `LocalDeclaration`; anything else is captured as an `Expression`
+    /// statement. Callers must ensure `pos` is on the first token of the
+    /// statement; this function returns a ready-to-alloc `AstNode::Statement`.
+    fn classify_and_parse_statement(&mut self) -> AstNode {
+        let decl_kind = match self.peek().map(|t| &t.token) {
+            Some(Token::Dim) => Some(DeclKind::Dim),
+            Some(Token::Static) => Some(DeclKind::Static),
+            Some(Token::Const) => Some(DeclKind::Const),
+            Some(Token::ReDim) => Some(DeclKind::ReDim),
+            _ => None,
+        };
+        if let Some(kind) = decl_kind {
+            let decl = self.parse_local_declaration(kind);
+            AstNode::Statement(StatementNode::LocalDeclaration(decl))
+        } else {
+            let expr = self.parse_expression_statement();
+            AstNode::Statement(StatementNode::Expression(expr))
         }
     }
 
