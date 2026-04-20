@@ -1,24 +1,64 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+11 完了)
+> 最終更新: 2026-04-21 (Sprint N+12 完了)
 > 現在ブランチ: main
-> テスト基準: 66 green (lib 36 + integration 30), cargo clippy -D warnings 0 件
+> テスト基準: 68 green (lib 36 + integration 32), cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+12)
+## 次 Sprint 推奨 (Sprint N+13)
 
-**Sprint Goal**: PBI-09c を完遂し、クロスモジュール diagnostics を届ける
+**Sprint Goal 候補**: PBI-10 — diagnostics の精度向上 or PBI-11 — workbook-context.json 連携
 
-### PBI-09c — クロスモジュール diagnostics: 他モジュール Public シンボルを未宣言変数検出から除外 (Small) ✅ Ready
+### PBI-10 — For Each ループ変数の undeclared 誤検出除外 (Small) 🔲 Backlog
 
 | 項目 | 内容 |
 |------|------|
-| **目的** | Option Explicit 有効時、他モジュールで定義された `Public Sub/Function/変数` を呼び出しても「未宣言変数」として誤検出されないようにする。 |
-| **背景** | PBI-09a/b でクロスモジュール補完・hover/goto-def を実装。diagnostics はまだ単一ファイルしか参照しないため、`Call ModuleA.Foo` が undeclared 扱いされる。`all_public_symbols_from_other_files()` が既存のため拡張は小規模。 |
-| **受入基準** | (1) Option Explicit 有効なモジュール B から `Public Sub Foo()` を定義するモジュール A の Foo を呼び出しても undeclared 診断が出ない。(2) `cargo test` 67+ green, clippy 0 件 |
+| **目的** | `For Each ws In ...` の `ws` が Dim 宣言済みでも `Next ws` の `ws` が undeclared 扱いされるケースを修正。 |
+| **背景** | For Each の loop 変数は宣言済み変数の再利用だが、`scan_expression_tokens` が `Next` 行のトークンを追跡できていない可能性。 |
+| **受入基準** | For Each テストで `Next ws` に対して undeclared 警告が出ないこと。68+ green, clippy 0。 |
 | **見積サイズ** | S |
-| **依存** | PBI-09a (完了済み) |
+| **依存** | なし |
+
+### PBI-11 — workbook-context.json シート名補完 (Medium) 🔲 Backlog
+
+| 項目 | 内容 |
+|------|------|
+| **目的** | workbook-context.json のシート名・テーブル名・名前付き範囲を補完候補に追加。 |
+| **背景** | CLAUDE.md に「workbook-context.json: provides sheet/table/named range info for completion」と記載あり。未実装。 |
+| **受入基準** | workbook-context.json からシート名が補完候補に現れること。 |
+| **見積サイズ** | M |
+| **依存** | なし |
+
+---
+
+## Sprint N+12 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-09c クロスモジュール diagnostics を届ける」を完全達成。
+
+### KPT
+
+#### Keep
+- `diagnostics::compute` への `cross_module_names: &HashSet<String>` 追加という最小シグネチャ変更が効果的だった。`all_public_symbols_from_other_files()` を lowercase 化して渡す 3 行のみで GREEN。
+- REFACTOR 評価で「3 呼び出し元がそれぞれ異なる型を要求するため helper 不要」を迷わず判断できた。
+- RED → GREEN → 変更なし (REFACTOR) → 変更なし (Tidy After) の 2 コミット構成が Sprint N+11 の "Tidy After 変更不要" パターンの再確認となった。
+
+#### Problem
+- `check_option_explicit` の引数が 4 個になり、将来さらに増える場合は構造体化を検討すべき。
+
+#### Try
+- `check_option_explicit` の引数が 5 個を超えた時点で `DiagnosticsContext` 構造体を導入する。
+
+---
+
+## 完了済み (Sprint N+12)
+
+| コミット | 内容 |
+|----------|------|
+| `8656345` | test: クロスモジュール Option Explicit RED テスト 2 件 (PBI-09c) |
+| `95b5d03` | feat: クロスモジュール diagnostics — 他モジュール Public シンボルを undeclared 検出から除外 (PBI-09c) |
 
 ---
 
@@ -151,7 +191,9 @@
 
 | PBI | タイトル | サイズ | 状態 |
 |-----|----------|--------|------|
-| PBI-09c | クロスモジュール diagnostics (undeclared 誤検出除外) | S | **Ready** |
+| PBI-09c | クロスモジュール diagnostics (undeclared 誤検出除外) | S | **Done** |
+| PBI-10 | For Each ループ変数 undeclared 誤検出除外 | S | Backlog |
+| PBI-11 | workbook-context.json シート名補完 | M | Backlog |
 
 ---
 
