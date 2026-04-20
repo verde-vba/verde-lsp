@@ -77,7 +77,22 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                     span: proc.span,
                     detail: SymbolDetail::Procedure {
                         kind: proc.kind.clone(),
-                        params: Vec::new(),
+                        params: proc
+                            .params
+                            .iter()
+                            .filter_map(|&id| {
+                                if let AstNode::Parameter(p) = &ast.nodes[id] {
+                                    Some(ParameterInfo {
+                                        name: p.name.clone(),
+                                        type_name: p.type_name.clone(),
+                                        passing: p.passing.clone(),
+                                        is_optional: p.is_optional,
+                                    })
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
                         return_type: proc.return_type.clone(),
                     },
                 });
