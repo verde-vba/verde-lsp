@@ -36,6 +36,19 @@ impl VbaLanguageServer {
     }
 }
 
+fn document_end_position(src: &str) -> Position {
+    let mut line = 0u32;
+    let mut last_line_start = 0usize;
+    for (i, ch) in src.char_indices() {
+        if ch == '\n' {
+            line += 1;
+            last_line_start = i + 1;
+        }
+    }
+    let character = src[last_line_start..].encode_utf16().count() as u32;
+    Position::new(line, character)
+}
+
 fn server_capabilities() -> ServerCapabilities {
     ServerCapabilities {
         position_encoding: Some(PositionEncodingKind::UTF16),
@@ -57,6 +70,7 @@ fn server_capabilities() -> ServerCapabilities {
         workspace_symbol_provider: Some(OneOf::Left(true)),
         document_highlight_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
+        document_formatting_provider: Some(OneOf::Left(true)),
         ..Default::default()
     }
 }
@@ -259,6 +273,23 @@ impl LanguageServer for VbaLanguageServer {
             position,
             new_name,
         ))
+    }
+
+    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+        let uri = &params.text_document.uri;
+        let src = match self.documents.get(uri) {
+            Some(s) => s.clone(),
+            None => return Ok(None),
+        };
+        let formatted = crate::formatting::apply_formatting(&src);
+        if formatted == src {
+            return Ok(None);
+        }
+        let end = document_end_position(&src);
+        Ok(Some(vec![TextEdit::new(
+            Range::new(Position::new(0, 0), end),
+            formatted,
+        )]))
     }
 }
 

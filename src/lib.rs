@@ -1,12 +1,12 @@
 pub mod analysis;
 pub mod code_action;
-pub mod formatting;
 pub mod completion;
 pub mod definition;
 pub mod document_highlight;
 pub mod document_symbol;
 pub mod excel_model;
 pub mod folding_range;
+pub mod formatting;
 pub mod hover;
 pub mod parser;
 pub mod references;
