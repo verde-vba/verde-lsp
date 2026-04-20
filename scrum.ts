@@ -94,7 +94,7 @@ const scrum: ScrumDashboard = {
     },
   ],
 
-  sprint: null,
+  sprint: null, // Sprint N+49 (Planning) completed — see plan.md PBI-46 Refinement section
 
   definition_of_done: {
     checks: [
@@ -105,6 +105,13 @@ const scrum: ScrumDashboard = {
   },
 
   completed: [
+    {
+      number: 49,
+      pbi_id: "PBI-46 (planning)",
+      goal: "PBI-46 実装見積・TDD方針・Sprint分割を plan.md に文書化 — N+50 二値判断可能状態",
+      status: "done",
+      subtasks: [],
+    },
     {
       number: 48,
       pbi_id: "PBI-45",
@@ -167,6 +174,29 @@ const scrum: ScrumDashboard = {
           timing: "sprint",
           status: "completed",
           outcome: "Sprint N+48 で Edit ツールをテスト追記に使用し、fmt 差分ゼロを維持",
+        },
+      ],
+    },
+    {
+      sprint: 49,
+      improvements: [
+        {
+          action: "token-based formatting (AST 不使用) を採用 — lex() の SpannedToken.text vs canonical 比較で keyword case を純粋関数として実装する",
+          timing: "sprint",
+          status: "active",
+          outcome: null,
+        },
+        {
+          action: "Sprint α (N+50): keyword case + 行末空白、Sprint β (N+51): indent の 2 分割で実装する",
+          timing: "sprint",
+          status: "active",
+          outcome: null,
+        },
+        {
+          action: "演算子スペース整形 (`=` 曖昧性) は AST 依存のため defer — MVP 外と明示してスコープ creep を防ぐ",
+          timing: "product",
+          status: "active",
+          outcome: null,
         },
       ],
     },

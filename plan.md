@@ -358,6 +358,98 @@ PBI-44 を完全達成。`complete_dot_access` に `Me` 特殊ケースを追加
 
 ---
 
+## Sprint N+48 レトロスペクティブ (PBI-45 — Excel Object Model 拡充)
+
+PBI-45 を完全達成。`src/excel_model/types.rs` に PivotTable / Chart / Shape の `ExcelObjectType` 定義を追加し、`complete_dot_access` に Excel builtin type フォールバック (UdtMember lookup 失敗時に `load_builtin_types()` を参照) を実装。Tidy First 順序 (型定義追加 → completion fallback 実装) を厳守。143 → 148 green (新規 5: PivotTable/Chart/Shape テスト 3 + regression 1) / clippy 0 / fmt pass。
+
+**Keep**: `load_builtin_types()` フォールバックが UDT 解決パスに触れずに Excel 型を吸収した設計 / Tidy First で `types.rs` 先行変更後に `completion.rs` を変更した順序 / regression テスト `existing_range_dot_completion_still_works` が既存補完の劣化を即検出
+**Problem**: PBI-43 (UDT) で確立した dot-access パスと Excel builtin フォールバックが同一 `complete_dot_access` 内に混在し、将来分岐が増えると複雑化するリスクがある
+**Try**: PBI-46 (textDocument/formatting) はスコープが広いため Planning Sprint (N+49) で見積もり・分割方針を先に確定する
+
+---
+
+## PBI-46 Backlog Refinement (Sprint N+49 Planning材料)
+
+### 概要
+
+`textDocument/formatting` (全文書整形) を実装し、VBA ファイルの indent と識別子 case を自動正規化する。
+
+### 整形ルール候補と MVP 選定
+
+| ルール | 難度 | AST 必要 | MVP |
+|---|---|---|---|
+| キーワード case 正規化 (`dim` → `Dim`) | XS | 不要 (token-based) | ★ |
+| Indent 正規化 (4 space per nesting level) | M | 不要 (depth tracking) | ★ |
+| 演算子スペース (`x=y` → `x = y`) | S-M | 必要 (`=` 曖昧性) | × (defer) |
+| 行末空白除去 | XS | 不要 | ★ (α に同梱) |
+| 手続き間 blank line 1 行統一 | XS | 不要 | 条件付き |
+
+**MVP = キーワード case 正規化 + 行末空白除去 + indent 正規化** (演算子スペースは差し戻し)。
+
+### 実装方針
+
+**token-based アプローチ** (AST 不使用):
+- 既存 `lex()` が `SpannedToken { token, span, text }` を返す
+- `Token` enum variant の canonical form (例: `Token::Sub` → `"Sub"`) と `text` を比較し差分を `TextEdit` に変換
+- キーワード case は `SpannedToken.text` vs canonical form の文字列比較のみ
+- `End Sub` / `End Function` 等の複合トークンも単一 `Token` バリアントのため canonical 表記が確定
+
+**Indent 計算** (depth tracking):
+- 行頭から字句トークンを走査し、`Sub/Function/Property/If/For/With/Select/Do/While/Type` でネストを +1、対応する `End *` / `Next` / `Loop` / `Wend` で -1
+- `ElseIf` / `Else` / `Case` はネスト depth を一時的に -1 してインデントを揃える (VBA 慣習)
+- 各行の現在インデント量を `leading_spaces()` で計測し、`depth * 4` と比較して TextEdit を生成
+
+**server.rs 変更**:
+- `server_capabilities()` に `document_formatting_provider: Some(OneOf::Left(true))` を追加
+- `formatting()` handler を実装 (`src/formatting.rs` 新規作成)
+
+### TDD 可能性
+
+**高い。** golden-string 比較で各ルールを独立テスト可能:
+
+```rust
+// tests/formatting.rs
+fn format_keyword_case_normalizes_dim() {
+    let input = "dim x as integer\nsub Foo()\nend sub";
+    let result = apply_formatting(input);
+    assert_eq!(result, "Dim x As Integer\nSub Foo()\nEnd Sub");
+}
+
+fn format_indent_normalizes_nested_if() {
+    let input = "Sub Foo()\nIf True Then\nx = 1\nEnd If\nEnd Sub";
+    let result = apply_formatting(input);
+    assert_eq!(result, "Sub Foo()\n    If True Then\n        x = 1\n    End If\nEnd Sub");
+}
+```
+
+`apply_formatting(src: &str) -> String` を pure function で実装するため、LSP 層と分離でき単体テストが容易。
+
+### 見積と Sprint 分割方針
+
+| Sprint | 内容 | サイズ |
+|---|---|---|
+| N+50 (α) | `src/formatting.rs` 新規 + keyword case + 行末空白 + `server.rs` capability 追加 | S |
+| N+51 (β) | indent 正規化 (depth tracking) | M |
+
+合計: M (2 Sprint)。PBI-43 (L→2 Sprint) の前例と同等。α は S のため N+50 で完結可能性高い。
+
+### 代替案 / リスク
+
+| 項目 | 評価 |
+|---|---|
+| 外部 VBA formatter crate | 存在しない — 実装必須 |
+| `rustfmt` 流用 | Rust 専用、不可 |
+| `prettier` VBA plugin | JS エコシステム依存、LSP サーバーへの組み込み不適 |
+| `=` 演算子スペース | `x = y` / `If x = y` / `As Long = 5` の文脈区別に AST 必要 — **defer** |
+| `ElseIf/Else/Case` indent | VBA 慣習 (Sub 本体と同深度) と `If` ボディの +1 の境界が複雑 — β で慎重に扱う |
+
+### 二値判断 (Sprint N+50 採択基準)
+
+- **採択**: α (S) で keyword case + 行末空白 → 既存テスト 148 green 維持を確認
+- **差し戻し**: `lex()` のスパンが UTF-16 TextEdit 座標と整合しない問題が発覚した場合 (要: β 前に確認)
+
+---
+
 ## Follow-ups (優先度低)
 
 - cargo test 並列化チューニング: >60s 警告散発対策として `-- --test-threads=4` など設定を検討。CI では影響なし。
