@@ -192,6 +192,24 @@ fn scan_procedure(
                     diagnostics,
                 );
             }
+            StatementNode::Do(node) => {
+                scan_expression_tokens(
+                    &node.tokens,
+                    source,
+                    declared,
+                    &local_declared,
+                    diagnostics,
+                );
+            }
+            StatementNode::Redim(node) => {
+                scan_expression_tokens(
+                    &node.tokens,
+                    source,
+                    declared,
+                    &local_declared,
+                    diagnostics,
+                );
+            }
         }
     }
 }

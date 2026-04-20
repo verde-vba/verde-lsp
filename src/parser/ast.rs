@@ -130,6 +130,8 @@ pub enum StatementNode {
     Call(CallStatementNode),
     Set(SetStatementNode),
     While(WhileStatementNode),
+    Do(DoStatementNode),
+    Redim(RedimStatementNode),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,6 +215,25 @@ pub struct SetStatementNode {
 /// `Wend` land separately in the enclosing procedure body.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WhileStatementNode {
+    pub tokens: Vec<SpannedToken>,
+    pub span: TextRange,
+}
+
+/// Header line of a `Do [While|Until] cond` loop, or a bare `Do` (infinite).
+/// Body statements and the matching `Loop [While|Until cond]` land separately
+/// in the enclosing procedure body.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DoStatementNode {
+    pub tokens: Vec<SpannedToken>,
+    pub span: TextRange,
+}
+
+/// A `ReDim [Preserve] arr(bounds)` statement. Captured as raw tokens so
+/// the bounds expression can be scanned for undeclared identifiers under
+/// Option Explicit. Unlike `Dim`, ReDim re-uses an already-declared array
+/// and does not introduce new names into scope.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RedimStatementNode {
     pub tokens: Vec<SpannedToken>,
     pub span: TextRange,
 }
