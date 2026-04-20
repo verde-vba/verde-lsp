@@ -188,3 +188,17 @@ impl LanguageServer for VbaLanguageServer {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn server_capabilities_declares_utf16_position_encoding() {
+        // LSP 3.17: server should explicitly negotiate positionEncoding.
+        // We declare UTF-16 to match the resolve.rs implementation
+        // (PBI-31 Sprint N+33).
+        let caps = server_capabilities();
+        assert_eq!(caps.position_encoding, Some(PositionEncodingKind::UTF16));
+    }
+}
