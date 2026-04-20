@@ -1,8 +1,50 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+25 完了)
+> 最終更新: 2026-04-21 (Sprint N+26 完了)
 > 現在ブランチ: main
-> テスト基準: 96 green (lib 36 + integration 60), cargo clippy -D warnings 0 件
+> テスト基準: 98 green (lib 36 + integration 62), cargo clippy -D warnings 0 件
+
+---
+
+## Sprint N+26 (2026-04-21)
+
+### Sprint Goal
+PBI-24: hover scope-aware — 同名パラメータを持つ複数 procedure がある場合に、cursor がある procedure のパラメータ型を hover で正しく表示する
+
+### Path Chosen
+`hover.rs` の `matches.first()` を definition.rs と同形の scope-aware 選択に変更。`position_to_offset` + `proc_ranges` で containing_proc を特定し、`proc_scope` が一致するシンボルを優先。fallback として先頭シンボル (既存動作) を維持。
+
+### Scope
+- `tests/hover.rs` に 2 テスト追加 (RED)
+  - `hover_parameter_in_first_proc_shows_its_type`
+  - `hover_parameter_in_second_proc_shows_its_type`
+- `src/hover.rs` の `hover` 関数を scope-aware に変更 (GREEN)
+
+### Acceptance Criteria
+1. Sub A(x As Integer) / Sub B(x As String) 構造で Sub A 内カーソルの hover → "Integer"
+2. Sub B 内カーソルの hover → "String"
+3. 既存 3 tests (local variable / cross-module / sub signature) は回帰なし
+4. cargo test 96 → 98 green, clippy -D warnings 0 件
+
+---
+
+## Sprint N+26 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-24 hover scope-aware」を完全達成。2つの修正を同時適用: scope-aware 選択 + SymbolDetail::None の type_name 利用。
+
+### KPT
+
+#### Keep
+- definition.rs と同形の `containing_proc + proc_scope` 優先ロジックを hover.rs に転用。パターンの再利用が機能した。
+- `SymbolDetail::None` でも `type_name` フィールドは正しく設定されていた。hover のレンダリング層だけ修正すれば済んだ。
+
+#### Problem
+- パラメータが `detail: SymbolDetail::None` で登録される設計は、hover や将来の機能拡張で再び同様の見落としを起こす可能性がある。
+
+#### Try
+- パラメータを `SymbolDetail::Variable { is_static: false }` で登録するか、専用の `SymbolDetail::Parameter` を追加することを検討 (PBI-25 候補)。
 
 ---
 
@@ -249,6 +291,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-21 | intra-file scope-aware rename (proc_scope 尊重) | XS | **Done** |
 | PBI-22 | rename パラメータスコープ対応 (proc_constraint 確認) | XS | **Done** |
 | PBI-23 | goto-def scope-aware (同名パラメータを含む procedure で正しくジャンプ) | XS | **Done** |
+| PBI-24 | hover scope-aware (同名パラメータを含む procedure で正しい型を表示) | XS | **Done** |
 
 ---
 
