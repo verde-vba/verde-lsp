@@ -183,6 +183,15 @@ fn scan_procedure(
                     diagnostics,
                 );
             }
+            StatementNode::While(node) => {
+                scan_expression_tokens(
+                    &node.tokens,
+                    source,
+                    declared,
+                    &local_declared,
+                    diagnostics,
+                );
+            }
         }
     }
 }

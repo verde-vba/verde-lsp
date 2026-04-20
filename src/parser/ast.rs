@@ -129,6 +129,7 @@ pub enum StatementNode {
     Select(SelectStatementNode),
     Call(CallStatementNode),
     Set(SetStatementNode),
+    While(WhileStatementNode),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -204,6 +205,14 @@ pub struct CallStatementNode {
 /// now; semantic splitting of lhs/rhs is deferred to a later sprint.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SetStatementNode {
+    pub tokens: Vec<SpannedToken>,
+    pub span: TextRange,
+}
+
+/// Header line of a `While cond` loop. Body statements and the matching
+/// `Wend` land separately in the enclosing procedure body.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WhileStatementNode {
     pub tokens: Vec<SpannedToken>,
     pub span: TextRange,
 }
