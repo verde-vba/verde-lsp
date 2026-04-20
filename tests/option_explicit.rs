@@ -130,3 +130,29 @@ fn option_explicit_flags_undeclared_in_set_rhs() {
         diagnostics
     );
 }
+
+#[test]
+fn option_explicit_flags_undeclared_in_for_header() {
+    // VBA: For loop where the bound expression uses an undeclared identifier
+    // Dim lo As Long is declared; upperBound is NOT declared
+    let src = r#"Option Explicit
+Sub Demo()
+    Dim lo As Long
+    For lo = 1 To upperBound
+        Debug.Print lo
+    Next lo
+End Sub"#;
+    let diags = diagnose(src);
+    assert!(
+        diags.iter().any(|d| {
+            d.severity == Some(DiagnosticSeverity::WARNING)
+                && d.message.to_lowercase().contains("upperbound")
+        }),
+        "expected warning for undeclared `upperBound`, got: {diags:?}"
+    );
+    // lo is declared — must NOT be warned
+    assert!(
+        !diags.iter().any(|d| d.message.to_lowercase().contains("'lo'")),
+        "unexpected warning for declared `lo`, got: {diags:?}"
+    );
+}
