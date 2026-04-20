@@ -1,8 +1,50 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+30 完了)
+> 最終更新: 2026-04-21 (Sprint N+31 完了)
 > 現在ブランチ: main
-> テスト基準: 103 green (lib 41 + integration 62), cargo clippy -D warnings 0 件
+> テスト基準: 104 green (lib 42 + integration 62), cargo clippy -D warnings 0 件
+
+---
+
+## Sprint N+31 (2026-04-21)
+
+### Sprint Goal
+PBI-29: enum member implicit value 計算 — explicit value を持たないメンバに「前メンバ value + 1」を自動採番する。`Enum Foo\n A\n B = 10\n C\nEnd Enum` で A=Some(0), B=Some(10), C=Some(11) になる。
+
+### Path Chosen
+`build_symbol_table` の EnumDef ブランチに `next_value: i64 = 0` カウンタを追加。explicit value が指定された場合は `next_value = v + 1`、None の場合は `Some(next_value)` を割り当てて `next_value += 1`。parser (AST) は変更せず、symbol table 構築時に計算する。
+
+### Scope
+- `src/analysis/symbols.rs` の `build_symbol_table` EnumDef ブランチに `next_value` カウンタ追加 (GREEN)
+- `src/analysis/symbols.rs` の tests に `enum_implicit_value_follows_previous_member` 追加 (RED)
+
+### Acceptance Criteria
+1. `Enum Foo\n A\n B = 10\n C\nEnd Enum` で A=Some(0), B=Some(10), C=Some(11)
+2. 既存 enum_member テスト (PBI-26/27/28) は回帰なし
+3. cargo test 103 → 104 green, clippy -D warnings 0 件, cargo fmt --check pass
+
+---
+
+## Sprint N+31 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-29 enum member implicit value 計算」を完全達成。`build_symbol_table` に 13 行追加のみで VBA 仕様の自動採番が機能した。
+
+### KPT
+
+#### Keep
+- parser の AST (`EnumDefNode.members: Vec<(SmolStr, Option<i64>)>`) は raw 値（explicit or None）を保持したまま、symbol table 構築時に resolved 値を計算する責務分離が明確。
+- `match value { Some(v) => { next_value = v+1; ... }, None => { let implicit = next_value; next_value += 1; ... } }` のパターンが VBA 仕様（explicit が来たらそこからリセット、なければ連番）を正確に表現。
+- 既存 hover.rs の `None => format!("{}.{}", ...)` ブランチが今後使われなくなる（EnumMember.value は常に Some）が、コード上は問題なし。
+
+#### Problem
+- `SymbolDetail::EnumMember.value: Option<i64>` の `None` ケースは今後発生しない（全メンバに implicit value が計算される）が、型は `Option` のまま。
+- octal (`&O17`) は依然未対応。
+
+#### Try
+- PBI-30 候補: hover/completion で `EnumMember.value` を表示する際の整数型 (Long/Integer) 表示。現状は `None` が消えるだけで表示は改善されていない（既に `Some(v)` ケースは表示されていた）。
+- `SymbolDetail::EnumMember.value` を `Option<i64>` → `i64` に変更することで「常に Some」という事実を型で表現できる（PBI-30b 候補、ただし hover.rs 変更も必要）。
 
 ---
 
@@ -475,6 +517,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-26 | SymbolDetail::None 完全廃止 — EnumMember バリアント追加 | XS | **Done** |
 | PBI-27 | Enum value parsing 対応 — integer literal 右辺を i64 として格納 | XS | **Done** |
 | PBI-28 | Enum member value で負数・16 進 literal 対応 | XS | **Done** |
+| PBI-29 | Enum member implicit value 計算（前メンバ + 1） | XS | **Done** |
 
 ---
 
