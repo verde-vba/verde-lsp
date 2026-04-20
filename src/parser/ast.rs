@@ -128,6 +128,12 @@ pub struct EnumDefNode {
 pub enum StatementNode {
     LocalDeclaration(LocalDeclarationNode),
     Expression(ExpressionStatementNode),
+    If(IfStatementNode),
+    For(ForStatementNode),
+    With(WithStatementNode),
+    Select(SelectStatementNode),
+    Call(CallStatementNode),
+    Set(SetStatementNode),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -153,6 +159,56 @@ pub struct ExpressionStatementNode {
     /// Raw tokens within the statement (excluding the terminating
     /// Newline/Colon). Preserves positional info so future AST walks can
     /// resolve identifier references without re-lexing the body.
+    pub tokens: Vec<SpannedToken>,
+    pub span: TextRange,
+}
+
+/// Header line of an `If ... Then` statement. Only the header tokens are
+/// captured; the block body (then/else branches, End If) lands as subsequent
+/// statements in the enclosing procedure body. Downstream passes will
+/// reconstruct block structure when needed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IfStatementNode {
+    pub tokens: Vec<SpannedToken>,
+    pub span: TextRange,
+}
+
+/// Header line of a `For ... [To|Each] ...` loop. Body statements and the
+/// matching `Next` land separately in the enclosing procedure body.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ForStatementNode {
+    pub tokens: Vec<SpannedToken>,
+    pub span: TextRange,
+}
+
+/// Header line of a `With obj` block. The inner statements and the matching
+/// `End With` land separately in the enclosing procedure body.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WithStatementNode {
+    pub tokens: Vec<SpannedToken>,
+    pub span: TextRange,
+}
+
+/// Header line of a `Select Case` block. Case arms, default, and the
+/// matching `End Select` land separately in the enclosing procedure body.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SelectStatementNode {
+    pub tokens: Vec<SpannedToken>,
+    pub span: TextRange,
+}
+
+/// A `Call Foo(...)` statement. Captured as raw tokens for now; argument
+/// parsing is deferred to a later sprint.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallStatementNode {
+    pub tokens: Vec<SpannedToken>,
+    pub span: TextRange,
+}
+
+/// A `Set lhs = rhs` object-reference assignment. Captured as raw tokens for
+/// now; semantic splitting of lhs/rhs is deferred to a later sprint.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetStatementNode {
     pub tokens: Vec<SpannedToken>,
     pub span: TextRange,
 }

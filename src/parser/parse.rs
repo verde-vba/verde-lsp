@@ -543,11 +543,15 @@ impl<'a> Parser<'a> {
 
     /// Dispatch to the appropriate per-statement parser based on the current
     /// leading token. Declaration keywords (Dim/Static/Const/ReDim) produce a
-    /// `LocalDeclaration`; anything else is captured as an `Expression`
-    /// statement. Callers must ensure `pos` is on the first token of the
-    /// statement; this function returns a ready-to-alloc `AstNode::Statement`.
+    /// `LocalDeclaration`; block-opening keywords (If/For/With/Select) and
+    /// top-level-statement keywords (Call/Set) produce the matching
+    /// `StatementNode` variant with the header-line tokens captured. Anything
+    /// else falls back to an `Expression` statement. Callers must ensure
+    /// `pos` is on the first token of the statement; this function returns a
+    /// ready-to-alloc `AstNode::Statement`.
     fn classify_and_parse_statement(&mut self) -> AstNode {
-        let decl_kind = match self.peek().map(|t| &t.token) {
+        let head = self.peek().map(|t| t.token.clone());
+        let decl_kind = match head {
             Some(Token::Dim) => Some(DeclKind::Dim),
             Some(Token::Static) => Some(DeclKind::Static),
             Some(Token::Const) => Some(DeclKind::Const),
@@ -556,19 +560,46 @@ impl<'a> Parser<'a> {
         };
         if let Some(kind) = decl_kind {
             let decl = self.parse_local_declaration(kind);
-            AstNode::Statement(StatementNode::LocalDeclaration(decl))
-        } else {
-            let expr = self.parse_expression_statement();
-            AstNode::Statement(StatementNode::Expression(expr))
+            return AstNode::Statement(StatementNode::LocalDeclaration(decl));
         }
+
+        let stmt = match head {
+            Some(Token::If) => {
+                let (tokens, span) = self.collect_statement_tokens();
+                StatementNode::If(IfStatementNode { tokens, span })
+            }
+            Some(Token::For) => {
+                let (tokens, span) = self.collect_statement_tokens();
+                StatementNode::For(ForStatementNode { tokens, span })
+            }
+            Some(Token::With) => {
+                let (tokens, span) = self.collect_statement_tokens();
+                StatementNode::With(WithStatementNode { tokens, span })
+            }
+            Some(Token::Select) => {
+                let (tokens, span) = self.collect_statement_tokens();
+                StatementNode::Select(SelectStatementNode { tokens, span })
+            }
+            Some(Token::Call) => {
+                let (tokens, span) = self.collect_statement_tokens();
+                StatementNode::Call(CallStatementNode { tokens, span })
+            }
+            Some(Token::Set) => {
+                let (tokens, span) = self.collect_statement_tokens();
+                StatementNode::Set(SetStatementNode { tokens, span })
+            }
+            _ => StatementNode::Expression(self.parse_expression_statement()),
+        };
+        AstNode::Statement(stmt)
     }
 
     /// Collect tokens for one statement up to the next Newline/Colon (outside
     /// parentheses). Line continuations are consumed as part of the current
     /// statement and are included in the captured token stream so downstream
     /// consumers retain positional fidelity. Leaves `pos` on the terminator
-    /// (or EOF); the caller skips it.
-    fn parse_expression_statement(&mut self) -> ExpressionStatementNode {
+    /// (or EOF); the caller skips it. Returns the raw token vector and the
+    /// covering span.
+    fn collect_statement_tokens(&mut self) -> (Vec<lexer::SpannedToken>, TextRange) {
         let start_offset = self.tokens.get(self.pos).map(|t| t.span.start).unwrap_or(0);
         let mut end_offset = start_offset;
         let mut tokens: Vec<lexer::SpannedToken> = Vec::new();
@@ -597,10 +628,12 @@ impl<'a> Parser<'a> {
             }
         }
 
-        ExpressionStatementNode {
-            tokens,
-            span: TextRange::new(start_offset, end_offset),
-        }
+        (tokens, TextRange::new(start_offset, end_offset))
+    }
+
+    fn parse_expression_statement(&mut self) -> ExpressionStatementNode {
+        let (tokens, span) = self.collect_statement_tokens();
+        ExpressionStatementNode { tokens, span }
     }
 
     fn parse_property(&mut self, visibility: Visibility) {
@@ -932,7 +965,7 @@ mod tests {
         ));
         assert!(matches!(
             statement(&result.ast, proc.body[2]),
-            StatementNode::Expression(_)
+            StatementNode::Call(_)
         ));
     }
 
@@ -1127,5 +1160,114 @@ mod tests {
             "body_range should not contain 'x As Long', got {:?}",
             body
         );
+    }
+
+    #[test]
+    fn parse_captures_if_statement_header() {
+        let result = parse("Sub F()\n    If x > 0 Then\n    End If\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert!(!proc.body.is_empty(), "expected at least one statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::If(node) => {
+                assert!(!node.tokens.is_empty(), "expected If header tokens");
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::If),
+                    "expected the If keyword inside captured header tokens"
+                );
+            }
+            other => panic!("expected If statement, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_captures_for_statement_header() {
+        let result = parse("Sub F()\n    For i = 1 To 10\n    Next i\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert!(!proc.body.is_empty(), "expected at least one statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::For(node) => {
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::For),
+                    "expected the For keyword inside captured header tokens"
+                );
+            }
+            other => panic!("expected For statement, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_captures_with_statement_header() {
+        let result = parse("Sub F()\n    With obj\n    End With\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert!(!proc.body.is_empty(), "expected at least one statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::With(node) => {
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::With),
+                    "expected the With keyword inside captured header tokens"
+                );
+            }
+            other => panic!("expected With statement, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_captures_select_statement_header() {
+        let result = parse("Sub F()\n    Select Case x\n    End Select\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert!(!proc.body.is_empty(), "expected at least one statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::Select(node) => {
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::Select),
+                    "expected the Select keyword inside captured header tokens"
+                );
+            }
+            other => panic!("expected Select statement, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_captures_call_statement() {
+        let result = parse("Sub F()\n    Call DoStuff(x)\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.body.len(), 1, "expected 1 body statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::Call(node) => {
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::Call),
+                    "expected the Call keyword inside captured tokens"
+                );
+                assert!(
+                    node.tokens
+                        .iter()
+                        .any(|t| t.token == Token::Identifier && t.text.as_str() == "DoStuff"),
+                    "expected the called identifier inside captured tokens"
+                );
+            }
+            other => panic!("expected Call statement, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_captures_set_statement() {
+        let result = parse("Sub F()\n    Set obj = New Foo\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.body.len(), 1, "expected 1 body statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::Set(node) => {
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::Set),
+                    "expected the Set keyword inside captured tokens"
+                );
+                assert!(
+                    node.tokens
+                        .iter()
+                        .any(|t| t.token == Token::Identifier && t.text.as_str() == "obj"),
+                    "expected the target identifier inside captured tokens"
+                );
+            }
+            other => panic!("expected Set statement, got {:?}", other),
+        }
     }
 }
