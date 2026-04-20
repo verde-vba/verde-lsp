@@ -1,16 +1,16 @@
 # verde-lsp バックログ
 
 > 最終更新: 2026-04-20  
-> 現在ブランチ: main (最新: d999975)  
-> テスト基準: 49 green, cargo clippy -D warnings 0 件
+> 現在ブランチ: main (最新: 1e7bc30)  
+> テスト基準: 53 green, cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+2)
+## 次 Sprint 推奨 (Sprint N+3)
 
-**PBI-01 (ローカル変数シンボル登録) を優先実施**  
-手続き内の `Dim` 宣言を `SymbolTable` に登録することで、hover / completion / definition が手続き内識別子の 50% をカバーできるようになる。  
-PBI-04 (Call site definition) は PBI-01 完了後に実施すると実装品質が高まる。
+**PBI-05 (While/Do/ReDim StatementNode 化) を推奨**  
+PBI-01, PBI-04 の完了で LSP の主要ナビ機能（hover/completion/definition）はカバー済み。  
+次は診断精度向上: `ReDim arr(n)` 等で Option Explicit が n を正しく undeclared として検出できるようにする。
 
 ---
 
@@ -75,6 +75,13 @@ PBI-04 (Call site definition) は PBI-01 完了後に実施すると実装品質
 | **調査メモ** | `src/parser/parse.rs` の `classify_and_parse_statement` ルータに While/Do/ReDim のエントリを追加する必要あり。`lexer::Token` に対応キーワードがあるか要確認 |
 
 ---
+
+## 完了済み (Sprint N+3)
+
+| コミット | 内容 |
+|----------|------|
+| `8c5e416` | refactor: LocalDeclarationNode に per-name identifier span を追加 (Tidy First) |
+| `1e7bc30` | feat: PBI-04 — Call 文・ベア呼び出し・ローカル変数への Go-to-Definition |
 
 ## 完了済み (Sprint N+2)
 
