@@ -1,25 +1,14 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+18 完了)
+> 最終更新: 2026-04-21 (Sprint N+19 完了)
 > 現在ブランチ: main
-> テスト基準: 79 green (lib 36 + integration 43), cargo clippy -D warnings 0 件
+> テスト基準: 81 green (lib 36 + integration 45), cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+19)
+## 次 Sprint 推奨 (Sprint N+20)
 
-**Sprint Goal**: PBI-17 を完遂し、textDocument/rename をクロスファイルに拡張する
-
-### PBI-17 — textDocument/rename クロスファイル拡張 (S) ✅ Ready
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | `rename` が宣言ファイルのみでなく全ファイルの呼び出し箇所も `WorkspaceEdit` に含めるよう拡張する。 |
-| **背景** | PBI-16 で `all_file_sources()` を追加済み。`rename.rs` が単一ファイルのみ検索するため他モジュールの呼び出し箇所が rename に含まれない。 |
-| **実装方針** | `host.with_source(uri, ...)` による単一ファイル処理を `host.all_file_sources()` ループに変更。word 取得と guard は現在ファイルのみで行い、テキスト検索を全ファイルに拡張する。 |
-| **受入基準** | (1) 2 ファイル workspace で ModuleA の Foo を rename すると ModuleB の呼び出し箇所も WorkspaceEdit に含まれる。(2) 81+ green, clippy 0。 |
-| **見積サイズ** | S |
-| **依存** | PBI-16 (完了済み) |
+**Sprint Goal 候補**: 新規 PBI を Refinement 後に実行
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -69,6 +58,36 @@
 
 #### Try
 - `check_option_explicit` の引数が 5 個を超えた時点で `DiagnosticsContext` 構造体を導入する。
+
+---
+
+## Sprint N+19 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-17 textDocument/rename クロスファイル拡張」を完全達成。
+
+### KPT
+
+#### Keep
+- `all_file_sources()` が `references` (PBI-16) と `rename` (PBI-17) の両方で活躍。PBI-16 の Tidy First がここで回収された。
+- word 取得 + guard を現在ファイルのみで行い、テキスト検索のみ全ファイルに拡張するという責務分割が clean。
+
+#### Problem
+- rename の guard (`find_symbol_by_name`) は現在ファイルの symbol のみ確認する。他ファイルで定義されたシンボルを他ファイルの call site から rename できない。
+
+#### Try
+- PBI-18: rename guard を cross-module symbols にも拡張する (現在の guard を `find_public_symbol_in_other_files` でフォールバック)。
+
+---
+
+## 完了済み (Sprint N+19)
+
+| コミット | 内容 |
+|----------|------|
+| `a21ace0` | docs(scrum): PBI-17 Refinement |
+| `340f061` | test: クロスファイル rename RED テスト (PBI-17) |
+| `984fdb0` | feat: textDocument/rename クロスファイル拡張 (PBI-17) |
 
 ---
 
@@ -399,7 +418,7 @@
 | PBI-14 | workbook-context.json 自動再読み込み (didChangeWatchedFiles) | S | **Done** |
 | PBI-15 | textDocument/references プロバイダ実装 | XS | **Done** |
 | PBI-16 | textDocument/references クロスファイル拡張 | S | **Done** |
-| PBI-17 | textDocument/rename クロスファイル拡張 | S | **Ready** |
+| PBI-17 | textDocument/rename クロスファイル拡張 | S | **Done** |
 | PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
