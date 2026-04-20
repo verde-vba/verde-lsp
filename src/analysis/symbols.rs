@@ -345,4 +345,30 @@ mod tests {
             other => panic!("expected SymbolDetail::EnumMember for Ten, got {:?}", other),
         }
     }
+
+    #[test]
+    fn enum_implicit_value_follows_previous_member() {
+        let result = parse("Enum Foo\n    A\n    B = 10\n    C\nEnd Enum\n");
+        let symbols = build_symbol_table(&result.ast);
+        for (name, expected) in [("A", Some(0i64)), ("B", Some(10i64)), ("C", Some(11i64))] {
+            let sym = symbols
+                .symbols
+                .iter()
+                .find(|s| s.name.as_str() == name && matches!(s.kind, SymbolKind::EnumMember))
+                .unwrap_or_else(|| panic!("expected enum member '{}' in symbol table", name));
+            match &sym.detail {
+                SymbolDetail::EnumMember { value, .. } => {
+                    assert_eq!(
+                        *value, expected,
+                        "expected {} = {:?}, got {:?}",
+                        name, expected, value
+                    );
+                }
+                other => panic!(
+                    "expected SymbolDetail::EnumMember for {}, got {:?}",
+                    name, other
+                ),
+            }
+        }
+    }
 }
