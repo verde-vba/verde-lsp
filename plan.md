@@ -1,14 +1,44 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+20 完了)
+> 最終更新: 2026-04-21 (Sprint N+21 完了)
 > 現在ブランチ: main
-> テスト基準: 83 green (lib 36 + integration 47), cargo clippy -D warnings 0 件
+> テスト基準: 88 green (lib 36 + integration 52), cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+21)
+## Sprint N+21 (2026-04-21)
 
-**Sprint Goal 候補**: 新規 PBI を Refinement 後に実行
+### Sprint Goal
+PBI-19: `textDocument/documentSymbol` プロバイダ実装 — Module 内 procedure/variable/type を階層で返す
+
+### Path Chosen
+Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
+
+### Scope
+- `src/document_symbol.rs` 新規作成
+- `SymbolTable.symbols` → `DocumentSymbol` 階層変換
+  - `proc_scope=None` → トップレベル
+  - `proc_scope=Some(name)` → 対応 Procedure の children
+- `server.rs` に `document_symbol` ハンドラ追加
+- `InitializeResult` に `document_symbol_provider` 追加
+
+### Probes
+- `proc_ranges` で Procedure の full range を取得 → `DocumentSymbol.range`
+- `Symbol.span` は name span → `DocumentSymbol.selection_range`
+- LSP `SymbolKind`: Procedure→FUNCTION, Variable→VARIABLE, TypeDef→STRUCT, EnumDef→ENUM
+
+### Acceptance Criteria
+1. `Sub Foo()` が kind=FUNCTION のトップレベルシンボルとして返される
+2. `Foo` のパラメータが children に含まれる
+3. Procedure 内の `Dim x` が children に含まれる
+4. モジュールレベル `Dim y` がトップレベルシンボルとして返される
+5. cargo test 80→84 green, clippy -D warnings 0 件
+
+---
+
+## 次 Sprint 推奨 (Sprint N+22)
+
+**Sprint Goal 候補**: Private 修飾子 cross-file rename 抑止 または symbol kind 対応
 
 ---
 
@@ -28,6 +58,28 @@
 | PBI-16 | textDocument/references クロスファイル拡張 | S | **Done** |
 | PBI-17 | textDocument/rename クロスファイル拡張 | S | **Done** |
 | PBI-18 | rename guard cross-module フォールバック | S | **Done** |
+| PBI-19 | textDocument/documentSymbol プロバイダ | S | **Done** |
+
+---
+
+## Sprint N+21 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-19 textDocument/documentSymbol プロバイダ実装」を完全達成。
+
+### KPT
+
+#### Keep
+- `proc_scope=None/Some(name)` という既存フィールドを階層構造にそのままマップ。新規データ構造ゼロ。
+- `proc_ranges` を procedure の full range に再利用し、`selection_range` = name span の LSP 慣例を正確に実装。
+- `collect_children` を独立関数に切り出しで、`build_hierarchy` の責務を明確化。
+
+#### Problem
+- EnumMember の span が EnumDef の span と同一になっている (build_symbol_table の既知制限)。
+
+#### Try
+- EnumMember の個別 name_span を追跡するか、現状の制限をコメントで明示。
 
 ---
 
