@@ -1,6 +1,6 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+33 完了 — PBI-31 UTF-16 対応)
+> 最終更新: 2026-04-21 (Sprint N+34 完了 — PBI-32 Cancel + PBI-32c positionEncoding 明示化)
 > 現在ブランチ: main
 > テスト基準: 108 green (lib 46 + integration 62), cargo clippy -D warnings 0 件
 
@@ -22,10 +22,12 @@ Windows 配布の前に踏み抜くと致命的な問題を先に解消する。
 
 | PBI | タイトル | サイズ | 根拠 |
 |---|---|---|---|
-| PBI-31 | `position_to_offset` を UTF-16 対応 (LSP 準拠) | S | `src/analysis/resolve.rs:77` が char 単位でカウント。サロゲートペア/astral plane 文字で goto-def/hover/rename が 1 文字ずれる可能性 |
-| PBI-32 | parser の `.expect()` 除去 — 不正入力でプロセスを落とさない | XS | `src/parser/parse.rs:860`, `:1426` の panic 経路。LSP サーバー死亡 = エディタ機能停止 |
+| PBI-31 | `position_to_offset` を UTF-16 対応 (LSP 準拠) | S | ~~根拠~~ **Done (Sprint N+33)** |
+| ~~PBI-32~~ | ~~parser の `.expect()` 除去~~ | ~~XS~~ | **Cancel (Sprint N+34 調査結果)** — production の panic 経路が存在しないことが判明。詳細は下記 "Sprint N+34 PBI-32 調査メモ" |
 | PBI-33 | Windows CI 追加 (GitHub Actions `windows-latest`) | S | build/test/clippy matrix、`file:///C:/...` URI 経路確認 |
 | PBI-34 | リリースバイナリ自動配布 (tag → `verde-lsp.exe`) | S | Verde desktop 同梱経路の実現 |
+| PBI-32b | `std::sync::RwLock.unwrap()` の poison 経路を tokio RwLock 化 or `expect` コメント化 | XS | `src/server.rs:46,70` / `src/analysis.rs:49,65,69,73` の 2 次 panic を抑止。現状到達経路なしだが defensive hardening |
+| PBI-32c | `positionEncoding` capability negotiation — initialize で UTF-16 を明示宣言 | XS | LSP 3.17 仕様。現状は既定 (UTF-16) 追従だが明示宣言で将来の UTF-8 client 互換を担保 |
 
 ### Phase 1 — 既存開発者の日常機能 (2-3 Sprint)
 
@@ -75,6 +77,41 @@ parser 拡張を含むため工数大。Phase 1/2 で体験が整った後に着
 - Phase 0 の UTF-16 バグ (PBI-31) は**実害が出る前に**潰す。現状 BMP 日本語 (ひらがな/漢字) は偶然動くが、文字列リテラルの emoji 等で破綻
 - Class module (PBI-44) の優先度は Verde 利用プロジェクトに `.cls` がどれだけ含まれるかで変動 — 要データ収集
 - formatting (PBI-46) は「既存開発者」軸なら Phase 1 に繰り上げる余地あり
+
+---
+
+## Sprint N+34 (2026-04-21)
+
+### Sprint Goal
+PBI-32 前提調査 + PBI-32c probe: (1) production の panic 経路を全件棚卸しし plan.md の PBI-32 cite 行を修正 / PBI 定義を更新。(2) LSP `initialize` で `positionEncoding` capability を明示宣言する (UTF-16 既定に追従)。
+
+### Path Chosen
+Option A + C の併走。B (Phase 0 残項目 PBI-33 Windows CI) は外部 CI 設定が必要で単独 Sprint 相当、今回見送り。
+
+### Panic 経路調査 (rg 'unwrap\(\)|expect\(|panic!|unreachable!' src/)
+
+| Location | 分類 | ユーザー入力到達可能性 |
+|---|---|---|
+| `parse.rs:148` `unreachable!()` | invariant | **不可** — `Public\|Private\|Friend` match arm (line 106) 内のみ |
+| `parse.rs:860–1426` (18 件) | `.expect()` / `panic!()` | **不可** — `#[cfg(test)]` mod (line 849 境界) 内 |
+| `symbols.rs:237–374` (14 件) | `.expect()` / `panic!()` / `unwrap()` | **不可** — `#[cfg(test)]` mod (line 237 境界) 内 |
+| `server.rs:46, 70` `RwLock.unwrap()` | poison-only | **間接** — 他スレッドが panic した場合のみ発火 (2 次 panic) |
+| `analysis.rs:49, 65, 69, 73` `RwLock.unwrap()` | poison-only | 同上 (2 次 panic) |
+
+**結論**: ユーザー入力駆動の production panic 経路は **0 件**。PBI-32 (`.expect()` 除去) は前提が成立せず Cancel。代替として 2 次 panic 抑止 PBI-32b (defensive hardening) を plan.md に追加。
+
+### Scope
+- plan.md: PBI-32 を Cancel に変更、調査メモ追記、PBI-32b / PBI-32c を新規追加 (docs-only commit)
+- `src/server.rs`: `initialize` ハンドラの `ServerCapabilities` に `position_encoding: Some(PositionEncodingKind::UTF16)` を明示 (code commit)
+- `src/analysis/resolve.rs` のテストコメントで UTF-16 が default であることを既に記載済み → 追加変更なし
+
+### Acceptance Criteria
+1. plan.md PBI-32 が Cancel 状態で、根拠 (rg 調査結果) が記載されている
+2. `initialize` が `positionEncoding: utf-16` を capability として返す
+3. 108 green 維持、clippy -D warnings 0 件、fmt pass
+
+### Result
+(執行後追記)
 
 ---
 
@@ -692,8 +729,10 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-28 | Enum member value で負数・16 進 literal 対応 | XS | **Done** |
 | PBI-29 | Enum member implicit value 計算（前メンバ + 1） | XS | **Done** |
 | PBI-30b | SymbolDetail::EnumMember.value を Option<i64> → i64（Tidy First 型変更） | XS | **Done** |
-| PBI-31 | `position_to_offset` を UTF-16 対応 (LSP 準拠) | S | Ready (Phase 0) |
-| PBI-32 | parser の `.expect()` 除去 — 不正入力で落とさない | XS | Ready (Phase 0) |
+| PBI-31 | `position_to_offset` を UTF-16 対応 (LSP 準拠) | S | **Done (Sprint N+33)** |
+| ~~PBI-32~~ | ~~parser の `.expect()` 除去~~ | ~~XS~~ | **Cancel (Sprint N+34)** |
+| PBI-32b | `RwLock.unwrap()` poison 経路の tokio 化 / `expect` 明示化 | XS | Ready (Phase 0 / defensive) |
+| PBI-32c | `positionEncoding` capability negotiation | XS | Ready (Phase 0 / LSP 3.17) |
 | PBI-33 | Windows CI 追加 (`windows-latest` matrix) | S | Ready (Phase 0) |
 | PBI-34 | リリースバイナリ自動配布 (tag → `verde-lsp.exe`) | S | Ready (Phase 0) |
 | PBI-35 | `textDocument/signatureHelp` 実装 | M | Backlog (Phase 1) |
