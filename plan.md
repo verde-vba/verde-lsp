@@ -1,6 +1,6 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+42 完了 — PBI-39 codeAction Dim quick fix 実装)
+> 最終更新: 2026-04-21 (Sprint N+43 完了 — PBI-41/42 Phase 2 ログ・workbook 経路確認)
 > 現在ブランチ: main
 > テスト基準: 123 green (lib 47 + integration 76), cargo clippy -D warnings 0 件
 
@@ -110,8 +110,8 @@
 | PBI-38 | `textDocument/foldingRange` — ブロック折りたたみ | S | **Done (Sprint N+41)** |
 | PBI-39 | `textDocument/codeAction` — "Dim を追加" quick fix | M | **Done (Sprint N+42)** |
 | PBI-40 | Verde からの stdio 起動 E2E テスト | S | Backlog (Phase 2) |
-| PBI-41 | `workbook-context.json` 書き出し経路検証 | XS | Backlog (Phase 2) |
-| PBI-42 | ログ出力方針統一 (`env_logger` → stderr) | XS | Backlog (Phase 2) |
+| PBI-41 | `workbook-context.json` 書き出し経路検証 | XS | **Done (Sprint N+43)** — tests/workbook.rs 既存カバレッジで完了 |
+| PBI-42 | ログ出力方針統一 (`env_logger` → stderr) | XS | **Done (Sprint N+43)** |
 | PBI-43 | UDT メンバー解決 (`foo.bar` completion/hover) | L | Backlog (Phase 3) |
 | PBI-44 | Class module (`.cls`) サポート | L | Backlog (Phase 3) |
 | PBI-45 | Excel Object Model 拡充 (PivotTable/Chart/Shape) | M | Backlog (Phase 3) |
