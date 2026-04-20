@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use tower_lsp::lsp_types::*;
 
-use crate::analysis::AnalysisHost;
 use crate::analysis::resolve;
+use crate::analysis::AnalysisHost;
 
 pub fn rename(
     host: &AnalysisHost,
@@ -10,8 +10,8 @@ pub fn rename(
     position: Position,
     new_name: &str,
 ) -> Option<WorkspaceEdit> {
-    host.with_symbols(uri, |symbols| {
-        let word = resolve::find_word_at_position("", position)?;
+    host.with_source(uri, |symbols, source| {
+        let word = resolve::find_word_at_position(source, position)?;
         let matches = resolve::find_symbol_by_name(symbols, &word);
 
         if matches.is_empty() {
@@ -21,7 +21,7 @@ pub fn rename(
         let edits: Vec<TextEdit> = matches
             .iter()
             .map(|sym| {
-                let range = resolve::text_range_to_lsp_range("", sym.span);
+                let range = resolve::text_range_to_lsp_range(source, sym.span);
                 TextEdit::new(range, new_name.to_string())
             })
             .collect();

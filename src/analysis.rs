@@ -59,6 +59,14 @@ impl AnalysisHost {
         self.files.get(uri).map(|file| f(&file.symbols))
     }
 
+    pub fn with_source<T>(
+        &self,
+        uri: &Url,
+        f: impl FnOnce(&SymbolTable, &str) -> T,
+    ) -> Option<T> {
+        self.files.get(uri).map(|file| f(&file.symbols, &file.source))
+    }
+
     pub fn symbol_table(&self, uri: &Url) -> Option<SymbolTable> {
         self.files.get(uri).map(|f| f.symbols.clone())
     }
