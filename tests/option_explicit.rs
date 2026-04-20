@@ -95,3 +95,18 @@ fn does_not_warn_on_for_each_with_declared_items() {
         "For Each with declared loop variable",
     );
 }
+
+#[test]
+fn option_explicit_flags_undeclared_in_if_header() {
+    let source = "Option Explicit\n\nSub Demo()\n    If undeclaredFlag Then\n        Debug.Print 1\n    End If\nEnd Sub\n";
+    let diagnostics = diagnose(source);
+
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.severity == Some(DiagnosticSeverity::WARNING)
+                && d.message.contains("undeclaredFlag")),
+        "expected a Warning diagnostic naming 'undeclaredFlag', got: {:?}",
+        diagnostics
+    );
+}

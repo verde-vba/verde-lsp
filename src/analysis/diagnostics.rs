@@ -129,8 +129,60 @@ fn scan_procedure(
                     diagnostics,
                 );
             }
-            #[allow(unreachable_patterns)]
-            _ => {}
+            StatementNode::If(node) => {
+                scan_expression_tokens(
+                    &node.tokens,
+                    source,
+                    declared,
+                    &local_declared,
+                    diagnostics,
+                );
+            }
+            StatementNode::For(node) => {
+                scan_expression_tokens(
+                    &node.tokens,
+                    source,
+                    declared,
+                    &local_declared,
+                    diagnostics,
+                );
+            }
+            StatementNode::With(node) => {
+                scan_expression_tokens(
+                    &node.tokens,
+                    source,
+                    declared,
+                    &local_declared,
+                    diagnostics,
+                );
+            }
+            StatementNode::Select(node) => {
+                scan_expression_tokens(
+                    &node.tokens,
+                    source,
+                    declared,
+                    &local_declared,
+                    diagnostics,
+                );
+            }
+            StatementNode::Call(node) => {
+                scan_expression_tokens(
+                    &node.tokens,
+                    source,
+                    declared,
+                    &local_declared,
+                    diagnostics,
+                );
+            }
+            StatementNode::Set(node) => {
+                scan_expression_tokens(
+                    &node.tokens,
+                    source,
+                    declared,
+                    &local_declared,
+                    diagnostics,
+                );
+            }
         }
     }
 }
