@@ -322,3 +322,77 @@ impl<'a> Parser<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn first_procedure(ast: &Ast) -> &ProcedureNode {
+        ast.nodes
+            .iter()
+            .find_map(|(_, n)| match n {
+                AstNode::Procedure(p) => Some(p),
+                _ => None,
+            })
+            .expect("expected a procedure")
+    }
+
+    fn parameter<'a>(ast: &'a Ast, id: NodeId) -> &'a ParameterNode {
+        match &ast.nodes[id] {
+            AstNode::Parameter(p) => p,
+            other => panic!("expected Parameter node, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_procedure_captures_single_parameter() {
+        let result = parse("Sub Foo(x As Long)\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.params.len(), 1, "expected 1 parameter");
+        let p = parameter(&result.ast, proc.params[0]);
+        assert_eq!(p.name.as_str(), "x");
+        assert_eq!(p.type_name.as_ref().map(|s| s.as_str()), Some("Long"));
+    }
+
+    #[test]
+    fn parse_procedure_captures_multiple_parameters() {
+        let result = parse("Sub Foo(a, b As String, c As Long)\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.params.len(), 3, "expected 3 parameters");
+        let names: Vec<&str> = proc
+            .params
+            .iter()
+            .map(|id| parameter(&result.ast, *id).name.as_str())
+            .collect();
+        assert_eq!(names, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn parse_procedure_captures_byval_optional_paramarray() {
+        let result = parse(
+            "Sub Foo(ByVal a As Long, Optional b As String = \"x\", ParamArray rest() As Variant)\nEnd Sub\n",
+        );
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.params.len(), 3, "expected 3 parameters");
+        let a = parameter(&result.ast, proc.params[0]);
+        let b = parameter(&result.ast, proc.params[1]);
+        let rest = parameter(&result.ast, proc.params[2]);
+        assert_eq!(a.passing, ParameterPassing::ByVal, "a should be ByVal");
+        assert!(b.is_optional, "b should be optional");
+        assert!(rest.is_param_array, "rest should be ParamArray");
+        assert_eq!(a.name.as_str(), "a");
+        assert_eq!(b.name.as_str(), "b");
+        assert_eq!(rest.name.as_str(), "rest");
+    }
+
+    #[test]
+    fn parse_procedure_with_empty_params() {
+        let result = parse("Sub Foo()\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert!(
+            proc.params.is_empty(),
+            "expected no params, got {}",
+            proc.params.len()
+        );
+    }
+}
