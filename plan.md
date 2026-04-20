@@ -1,8 +1,49 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+26 完了)
+> 最終更新: 2026-04-21 (Sprint N+27 完了)
 > 現在ブランチ: main
-> テスト基準: 98 green (lib 36 + integration 62), cargo clippy -D warnings 0 件
+> テスト基準: 99 green (lib 37 + integration 62), cargo clippy -D warnings 0 件
+
+---
+
+## Sprint N+27 (2026-04-21)
+
+### Sprint Goal
+PBI-25: パラメータ symbol 登録の設計改善 — `SymbolDetail::Parameter` バリアントを追加し、パラメータが `SymbolDetail::None` で登録される設計上の非対称を解消する
+
+### Path Chosen
+Option (A) — `SymbolDetail::Parameter { type_name, passing, is_optional }` を新設。`build_symbol_table` のパラメータ登録を `None → Parameter` に変更。`hover.rs` に `Parameter` ブランチを追加し `ByVal/ByRef/Optional` を含む表示を実装。`SymbolDetail::None` は `EnumMember` 専用として残存。
+
+### Scope
+- `src/analysis/symbols.rs` に `SymbolDetail::Parameter` バリアント追加 + 登録変更 (RED→GREEN)
+- `src/hover.rs` に `SymbolDetail::Parameter` ブランチ追加 (GREEN)
+- テスト 1 件追加: `parameter_symbol_has_parameter_detail`
+
+### Acceptance Criteria
+1. `SymbolDetail::Parameter` バリアントが存在し、パラメータシンボルに使われる
+2. hover でパラメータが `ByVal x As Integer` 形式で表示される
+3. `SymbolDetail::None` は EnumMember にのみ使用される
+4. cargo test 98 → 99 green, clippy -D warnings 0 件
+
+---
+
+## Sprint N+27 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-25 SymbolDetail::Parameter 追加」を完全達成。設計の非対称 (`SymbolKind::Parameter` あり ← `SymbolDetail` に対応バリアントなし) を解消。
+
+### KPT
+
+#### Keep
+- `Symbol.type_name` フィールドも引き続き設定することで、`type_name` を直接参照している既存コードへの影響ゼロ。非破壊的な拡張。
+- `passing` / `is_optional` を `SymbolDetail::Parameter` に持たせたことで、将来の signature help / completion など詳細表示への拡張点が整備された。
+
+#### Problem
+- `SymbolDetail::None` は `EnumMember` にのみ残存。EnumMember にも専用バリアント (`SymbolDetail::EnumMember`) を追加すれば `None` を完全廃止できる。
+
+#### Try
+- `SymbolDetail::None` の完全廃止を PBI-26 候補として記録 (優先度低)。
 
 ---
 
@@ -292,6 +333,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-22 | rename パラメータスコープ対応 (proc_constraint 確認) | XS | **Done** |
 | PBI-23 | goto-def scope-aware (同名パラメータを含む procedure で正しくジャンプ) | XS | **Done** |
 | PBI-24 | hover scope-aware (同名パラメータを含む procedure で正しい型を表示) | XS | **Done** |
+| PBI-25 | SymbolDetail::Parameter 追加 — パラメータ登録の設計改善 | XS | **Done** |
 
 ---
 
