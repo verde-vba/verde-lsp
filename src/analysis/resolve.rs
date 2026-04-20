@@ -122,3 +122,42 @@ fn offset_to_position(source: &str, offset: usize) -> Position {
 fn is_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn position_to_offset_counts_ascii_as_one_utf16_unit() {
+        let source = "abc\ndef";
+        assert_eq!(position_to_offset(source, Position::new(0, 0)), Some(0));
+        assert_eq!(position_to_offset(source, Position::new(0, 2)), Some(2));
+        assert_eq!(position_to_offset(source, Position::new(1, 1)), Some(5));
+    }
+
+    #[test]
+    fn position_to_offset_counts_bmp_char_as_one_utf16_unit() {
+        // 'あ' (U+3042) occupies 3 UTF-8 bytes and 1 UTF-16 code unit.
+        let source = "あabc";
+        assert_eq!(position_to_offset(source, Position::new(0, 1)), Some(3));
+        assert_eq!(position_to_offset(source, Position::new(0, 2)), Some(4));
+    }
+
+    #[test]
+    fn position_to_offset_counts_astral_char_as_two_utf16_units() {
+        // '𝕏' (U+1D54F) occupies 4 UTF-8 bytes and 2 UTF-16 code units
+        // (surrogate pair). LSP client sends UTF-16 offsets, so the column
+        // for the following ASCII char must be 2, not 1.
+        let source = "𝕏abc";
+        assert_eq!(position_to_offset(source, Position::new(0, 2)), Some(4));
+        assert_eq!(position_to_offset(source, Position::new(0, 3)), Some(5));
+    }
+
+    #[test]
+    fn text_range_to_lsp_range_emits_utf16_columns_for_astral_char() {
+        let source = "𝕏abc";
+        let range = text_range_to_lsp_range(source, TextRange::new(4, 5));
+        assert_eq!(range.start, Position::new(0, 2));
+        assert_eq!(range.end, Position::new(0, 3));
+    }
+}
