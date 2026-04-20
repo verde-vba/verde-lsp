@@ -58,6 +58,7 @@ impl LanguageServer for VbaLanguageServer {
                 definition_provider: Some(OneOf::Left(true)),
                 rename_provider: Some(OneOf::Left(true)),
                 references_provider: Some(OneOf::Left(true)),
+                document_symbol_provider: Some(OneOf::Left(true)),
                 ..Default::default()
             },
             ..Default::default()
@@ -161,6 +162,19 @@ impl LanguageServer for VbaLanguageServer {
         let position = params.text_document_position.position;
         let locs = crate::references::find_references(&self.analysis, uri, position);
         Ok(if locs.is_empty() { None } else { Some(locs) })
+    }
+
+    async fn document_symbol(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> Result<Option<DocumentSymbolResponse>> {
+        let uri = &params.text_document.uri;
+        let syms = crate::document_symbol::document_symbols(&self.analysis, uri);
+        if syms.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(DocumentSymbolResponse::Nested(syms)))
+        }
     }
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
