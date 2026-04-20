@@ -1,8 +1,60 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+21 完了)
+> 最終更新: 2026-04-21 (Sprint N+22 完了)
 > 現在ブランチ: main
-> テスト基準: 88 green (lib 36 + integration 52), cargo clippy -D warnings 0 件
+> テスト基準: 90 green (lib 36 + integration 54), cargo clippy -D warnings 0 件
+
+---
+
+## Sprint N+22 (2026-04-21)
+
+### Sprint Goal
+PBI-20: Private シンボルの cross-file rename 抑止 — Private Sub / local variable が他ファイルに rename 伝播しないよう visibility チェックを追加する
+
+### Path Chosen
+Option (A) — `rename.rs` の guard を `(word, cross_file_eligible)` に拡張。`cross_file_eligible = is_public_module_level || found_cross` で分岐。
+
+### Scope
+- `tests/rename.rs` に 2 テスト追加 (RED)
+  - `rename_private_sub_stays_in_single_file`
+  - `rename_local_variable_stays_in_single_file`
+- `src/rename.rs` で visibility チェックを追加 (GREEN)
+  - `Visibility::Public && proc_scope.is_none()` の場合のみ cross-file
+  - それ以外は current file のみ
+
+### Acceptance Criteria
+1. `Private Sub Foo()` を rename しても他ファイルの `Private Sub Foo()` は変更されない
+2. `Dim x` (local variable) を rename しても他ファイルの `x` は変更されない
+3. `Public Sub Foo()` の cross-file rename は引き続き動作する (回帰なし)
+4. cargo test 88 → 90 green, clippy -D warnings 0 件
+
+---
+
+## Sprint N+22 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-20 Private シンボルの cross-file rename 抑止」を完全達成。
+
+### KPT
+
+#### Keep
+- `(word, cross_file_eligible)` という最小タプル変更で guard ロジックを拡張。既存の公開 API は一切変えず。
+- `Visibility::Public && proc_scope.is_none()` という条件が VBA モジュール公開シンボルの定義と正確に一致し、追加の型定義ゼロ。
+
+#### Problem
+- rename はまだ text-based (find_all_word_occurrences)。同一ファイル内でも別 procedure の同名ローカル変数が rename される可能性がある。
+
+#### Try
+- intra-file scope-aware rename: cursor が proc_scope=Some(X) のシンボル上にある場合、同 procedure 内の occurrences のみ rename する (PBI-21 候補)。
+
+---
+
+## 次 Sprint 推奨 (Sprint N+23)
+
+**Sprint Goal 候補**:
+1. intra-file scope-aware rename (同一ファイル内でも proc_scope を尊重) — XS
+2. symbol kind 対応 (completion/hover での種別表示改善) — S
 
 ---
 
@@ -59,6 +111,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-17 | textDocument/rename クロスファイル拡張 | S | **Done** |
 | PBI-18 | rename guard cross-module フォールバック | S | **Done** |
 | PBI-19 | textDocument/documentSymbol プロバイダ | S | **Done** |
+| PBI-20 | Private シンボルの cross-file rename 抑止 | XS | **Done** |
 
 ---
 
