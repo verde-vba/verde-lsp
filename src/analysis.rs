@@ -85,4 +85,26 @@ impl AnalysisHost {
         }
         result
     }
+
+    /// Find the first Public module-level symbol matching `name` (case-insensitive)
+    /// across all files except `current_uri`. Returns the source URI and symbol.
+    pub fn find_public_symbol_in_other_files(
+        &self,
+        current_uri: &Url,
+        name: &str,
+    ) -> Option<(Url, symbols::Symbol)> {
+        for entry in self.files.iter() {
+            if entry.key() == current_uri {
+                continue;
+            }
+            if let Some(sym) = entry.symbols.symbols.iter().find(|s| {
+                s.visibility == crate::parser::ast::Visibility::Public
+                    && s.proc_scope.is_none()
+                    && s.name.eq_ignore_ascii_case(name)
+            }) {
+                return Some((entry.key().clone(), sym.clone()));
+            }
+        }
+        None
+    }
 }
