@@ -74,6 +74,12 @@ pub fn check_option_explicit(
     // signature should not trigger undeclared warnings.
     let mut signature_spans: Vec<TextRange> = Vec::new();
 
+    // Parameter names harvested from procedure signature lines. The parser
+    // does not (yet) populate ProcedureNode.params, so we do a lightweight
+    // text scan of each signature line between `(` and `)`, filtering out
+    // parameter modifier keywords and the declared types.
+    let mut parameter_names: Vec<String> = Vec::new();
+
     for (_, node) in ast.nodes.iter() {
         match node {
             AstNode::Variable(v) => skip_spans.push(v.span),
@@ -86,6 +92,8 @@ pub fn check_option_explicit(
                     .map(|off| start + off)
                     .unwrap_or(source.len());
                 signature_spans.push(TextRange::new(start, end_of_line));
+                parameter_names
+                    .extend(extract_parameter_names(&source[start..end_of_line]));
             }
             _ => {}
         }
@@ -127,6 +135,11 @@ pub fn check_option_explicit(
     let mut expecting_type = false;
     let mut local_declared: std::collections::HashSet<String> =
         std::collections::HashSet::new();
+    // Seed with procedure parameter names so their use inside the body
+    // doesn't trigger undeclared warnings.
+    for name in &parameter_names {
+        local_declared.insert(name.clone());
+    }
 
     for spanned in &tokens {
         // Update decl-list state BEFORE handling identifiers so the keyword
@@ -234,4 +247,49 @@ fn in_any_span(offset: usize, spans: &[TextRange]) -> bool {
     spans
         .iter()
         .any(|s| offset >= s.start as usize && offset < s.end as usize)
+}
+
+/// Extract lowercased parameter names from a procedure signature line such as
+/// `Sub Foo(ByVal name As String, Optional count As Long = 0)`.
+///
+/// The parser does not yet populate `ProcedureNode.params`, so we do a
+/// lightweight text scan: take the substring between the first `(` and the
+/// matching `)`, split on commas, then for each parameter take the first
+/// identifier that is not a modifier keyword (`ByVal`, `ByRef`, `Optional`,
+/// `ParamArray`). `As <type>` clauses and default-value expressions after `=`
+/// are ignored.
+fn extract_parameter_names(signature_line: &str) -> Vec<String> {
+    let Some(open) = signature_line.find('(') else {
+        return Vec::new();
+    };
+    let rest = &signature_line[open + 1..];
+    let close = rest.find(')').unwrap_or(rest.len());
+    let param_list = &rest[..close];
+
+    let mut names = Vec::new();
+    for raw in param_list.split(',') {
+        // Only consider text before `As` (type clause) or `=` (default value).
+        let before_type = raw
+            .split_whitespace()
+            .take_while(|w| !w.eq_ignore_ascii_case("As") && !w.starts_with('='))
+            .filter(|w| {
+                !w.eq_ignore_ascii_case("ByVal")
+                    && !w.eq_ignore_ascii_case("ByRef")
+                    && !w.eq_ignore_ascii_case("Optional")
+                    && !w.eq_ignore_ascii_case("ParamArray")
+            })
+            .collect::<Vec<_>>();
+        if let Some(first) = before_type.first() {
+            // Strip a trailing type-suffix sigil (e.g. `name$`, `count%`) and
+            // any trailing parentheses for array params (`arr()`).
+            let cleaned: String = first
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            if !cleaned.is_empty() {
+                names.push(cleaned.to_ascii_lowercase());
+            }
+        }
+    }
+    names
 }

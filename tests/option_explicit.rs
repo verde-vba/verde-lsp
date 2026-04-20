@@ -86,6 +86,29 @@ fn does_not_warn_on_for_next_loop() {
 }
 
 #[test]
+fn does_not_warn_on_procedure_parameter_usage() {
+    let source = "Option Explicit\n\nSub Foo(ByVal name As String)\n    MsgBox name\nEnd Sub\n";
+    let uri: Url = "file:///test.bas".parse().unwrap();
+
+    let host = AnalysisHost::new();
+    let parse_result = parser::parse(source);
+    host.update(uri.clone(), source.to_string(), parse_result);
+
+    let diagnostics = host.diagnostics(&uri);
+
+    assert!(
+        diagnostics.is_empty(),
+        "expected zero diagnostics for procedure parameter usage in body, got {}: [{}]",
+        diagnostics.len(),
+        diagnostics
+            .iter()
+            .map(|d| format!("{:?}: {}", d.severity, d.message))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+}
+
+#[test]
 fn does_not_warn_for_member_access_rhs_identifiers() {
     let source = "Option Explicit\n\nSub Main()\n    Dim ws As Worksheet\n    ws.Range(\"A1\").Value = 10\nEnd Sub\n";
     let uri: Url = "file:///test.bas".parse().unwrap();
