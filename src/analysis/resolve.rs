@@ -29,20 +29,16 @@ pub fn find_symbol_by_name<'a>(symbols: &'a SymbolTable, name: &str) -> Vec<&'a 
 /// to collect all reference sites in addition to declaration sites.
 pub fn find_all_word_occurrences(source: &str, word: &str) -> Vec<TextRange> {
     let bytes = source.as_bytes();
-    let word_lower = word.to_ascii_lowercase();
     let word_len = word.len();
     let mut result = Vec::new();
     let mut i = 0;
 
     while i + word_len <= bytes.len() {
         let prev_is_ident = i > 0 && is_ident_char(bytes[i - 1]);
-        if !prev_is_ident {
-            let candidate = &source[i..i + word_len];
-            if candidate.to_ascii_lowercase() == word_lower {
-                let next_is_ident = (i + word_len) < bytes.len() && is_ident_char(bytes[i + word_len]);
-                if !next_is_ident {
-                    result.push(TextRange::new(i, i + word_len));
-                }
+        if !prev_is_ident && source[i..i + word_len].eq_ignore_ascii_case(word) {
+            let next_is_ident = (i + word_len) < bytes.len() && is_ident_char(bytes[i + word_len]);
+            if !next_is_ident {
+                result.push(TextRange::new(i, i + word_len));
             }
         }
         i += 1;
