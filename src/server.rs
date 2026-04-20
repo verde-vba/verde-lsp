@@ -52,6 +52,7 @@ fn server_capabilities() -> ServerCapabilities {
         definition_provider: Some(OneOf::Left(true)),
         rename_provider: Some(OneOf::Left(true)),
         references_provider: Some(OneOf::Left(true)),
+        workspace_symbol_provider: Some(OneOf::Left(true)),
         document_highlight_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
         ..Default::default()
@@ -184,6 +185,14 @@ impl LanguageServer for VbaLanguageServer {
         let position = params.text_document_position.position;
         let locs = crate::references::find_references(&self.analysis, uri, position);
         Ok(if locs.is_empty() { None } else { Some(locs) })
+    }
+
+    async fn symbol(
+        &self,
+        params: WorkspaceSymbolParams,
+    ) -> Result<Option<Vec<SymbolInformation>>> {
+        let syms = crate::workspace_symbol::workspace_symbols(&self.analysis, &params.query);
+        Ok(if syms.is_empty() { None } else { Some(syms) })
     }
 
     async fn document_highlight(

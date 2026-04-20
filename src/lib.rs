@@ -11,3 +11,4 @@ pub mod rename;
 pub mod server;
 pub mod signature_help;
 pub mod vba_builtins;
+pub mod workspace_symbol;
