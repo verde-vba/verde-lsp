@@ -573,4 +573,53 @@ mod tests {
             proc.params.len()
         );
     }
+
+    #[test]
+    fn parse_procedure_records_body_range() {
+        let source = "Sub Foo()\n    x = 1\nEnd Sub\n";
+        let result = parse(source);
+        let proc = first_procedure(&result.ast);
+        let body = &source[proc.body_range.start as usize..proc.body_range.end as usize];
+        assert!(
+            body.starts_with("    x = 1"),
+            "expected body to start with the body line, got {:?}",
+            body
+        );
+        let end_idx = source.find("End Sub").expect("End Sub must exist");
+        assert_eq!(
+            proc.body_range.end as usize, end_idx,
+            "body_range.end should point at the start of End Sub"
+        );
+    }
+
+    #[test]
+    fn parse_procedure_body_range_is_empty_when_no_body() {
+        let source = "Sub Foo()\nEnd Sub\n";
+        let result = parse(source);
+        let proc = first_procedure(&result.ast);
+        let body = &source[proc.body_range.start as usize..proc.body_range.end as usize];
+        assert!(
+            body.trim().is_empty(),
+            "expected empty/whitespace-only body, got {:?}",
+            body
+        );
+    }
+
+    #[test]
+    fn parse_procedure_body_range_excludes_signature() {
+        let source = "Sub Foo(x As Long)\n    y = x\nEnd Sub\n";
+        let result = parse(source);
+        let proc = first_procedure(&result.ast);
+        let body = &source[proc.body_range.start as usize..proc.body_range.end as usize];
+        assert!(
+            !body.contains("Sub Foo"),
+            "body_range should not contain 'Sub Foo', got {:?}",
+            body
+        );
+        assert!(
+            !body.contains("x As Long"),
+            "body_range should not contain 'x As Long', got {:?}",
+            body
+        );
+    }
 }
