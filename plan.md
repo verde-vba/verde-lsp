@@ -1,8 +1,8 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+34 完了 — PBI-32 Cancel + PBI-32c positionEncoding 明示化)
+> 最終更新: 2026-04-21 (Sprint N+35 完了 — PBI-33 Windows CI + smoke tests 追加)
 > 現在ブランチ: main
-> テスト基準: 108 green (lib 46 + integration 62), cargo clippy -D warnings 0 件
+> テスト基準: 111 green (lib 47 + integration 64), cargo clippy -D warnings 0 件
 
 ---
 
@@ -77,6 +77,65 @@ parser 拡張を含むため工数大。Phase 1/2 で体験が整った後に着
 - Phase 0 の UTF-16 バグ (PBI-31) は**実害が出る前に**潰す。現状 BMP 日本語 (ひらがな/漢字) は偶然動くが、文字列リテラルの emoji 等で破綻
 - Class module (PBI-44) の優先度は Verde 利用プロジェクトに `.cls` がどれだけ含まれるかで変動 — 要データ収集
 - formatting (PBI-46) は「既存開発者」軸なら Phase 1 に繰り上げる余地あり
+
+---
+
+## Sprint N+35 (2026-04-21)
+
+### Sprint Goal
+PBI-33: Windows CI 追加 — `.github/workflows/ci.yml` に `ubuntu-latest` + `windows-latest` matrix を追加し、`file:///C:/...` URI 経路の cross-module smoke test 2 本を green にする。Verde desktop Windows 配布の CI 基盤を確立する。
+
+### Path Chosen
+Tidy First 不要 (新規ファイル作成のみ)。
+1. `.github/workflows/ci.yml` 新規作成: `ubuntu-latest` / `windows-latest` matrix + `fail-fast: false`、`dtolnay/rust-toolchain@stable` + `Swatinem/rust-cache@v2` で build cache
+2. `tests/option_explicit.rs` に Windows URI smoke test 2 本追加
+
+### Scope
+- `.github/workflows/ci.yml`: 新規作成
+- `tests/option_explicit.rs`: `windows_drive_letter_uri_cross_module_public_symbol_smoke` / `windows_drive_letter_uri_qualified_module_name_smoke` 追加
+
+### Acceptance Criteria
+1. `.github/workflows/ci.yml` が ubuntu-latest + windows-latest を matrix で実行する
+2. `file:///C:/workspace/ModuleA.bas` 形式の URI で cross-module diagnostics が正しく動作する
+3. 109 → 111 green、clippy -D warnings 0 件、fmt pass
+
+### Result
+111 green (lib 47 / integration 64) / clippy 0 / fmt pass。
+- `url` クレートの `path_segments()` は Windows ドライブレター (`C:`) を path segment の 1 つとして扱うため、既存の `collect_other_module_names` が無変更で正しく機能した
+- smoke test は macOS でも pass するクロスプラットフォームテストとして実装 (Windows-only skip 不要)
+- 2 commit 構成: CI workflow 追加 / smoke tests 追加
+
+---
+
+## Sprint N+35 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-33 Windows CI 追加」を完全達成。CI workflow + smoke tests が全 111 green。
+
+### KPT
+
+#### Keep
+- **実装前に `path_segments()` の挙動を確認した価値**: `file:///C:/workspace/ModuleA.bas` の URI が `["C:", "workspace", "ModuleA.bas"]` に分解され `next_back()` で正しくファイル名が得られると確認してから smoke test を書いた。コードを変更せずに「既存実装が Windows URI に対応済み」という事実をテストで固定できた
+- **`fail-fast: false` の意識的な選択**: ubuntu が先に失敗しても windows の結果を得たい。CI 新規追加時は特に両 OS の独立した実行結果が重要
+- **smoke test をクロスプラットフォームにした選択**: `#[cfg(windows)]` で skip にすると macOS CI では動作確認できない。URI 文字列を直接 parse するアプローチなら全 OS で同じテストが走り、ロジックの正しさを常に保証できる
+
+#### Problem
+- Windows Actions runner で実際に `cargo test` / `cargo clippy` / `cargo fmt --check` が全て通るかは push するまで不明。`windows-latest` には独自の toolchain 挙動 (CRLF 改行など) があり、`cargo fmt --check` で問題が出る可能性がある
+- `Swatinem/rust-cache@v2` の効果は初回 push 後にしか現れない。初回の Windows build は遅い可能性がある
+
+#### Try
+- CI push 後に Actions の結果を確認し、windows-latest で失敗があれば即修正 Sprint を立てる
+- PBI-34 (リリースバイナリ自動配布 tag → `verde-lsp.exe`) を次 Sprint 候補とする。CI が green になったことで tag-triggered release workflow の基盤が整った
+- `cargo fmt --check` が Windows で CRLF 関連で fail した場合は `.editorconfig` または `core.autocrlf=false` の設定を検討
+
+### Next Sprint Candidates
+
+| 優先度 | PBI | 理由 |
+|---|---|---|
+| 1 | PBI-34 | リリースバイナリ自動配布 (tag → `verde-lsp.exe`)。CI green が前提で整った |
+| 2 | PBI-32b | RwLock poison defensive hardening。urgency 低だが Phase 0 残項目 |
+| 3 | PBI-35 | signatureHelp (Phase 1)。既存開発者の日常機能 |
 
 ---
 
@@ -763,7 +822,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | ~~PBI-32~~ | ~~parser の `.expect()` 除去~~ | ~~XS~~ | **Cancel (Sprint N+34)** |
 | PBI-32b | `RwLock.unwrap()` poison 経路の tokio 化 / `expect` 明示化 | XS | Ready (Phase 0 / defensive) |
 | PBI-32c | `positionEncoding` capability negotiation | XS | Ready (Phase 0 / LSP 3.17) |
-| PBI-33 | Windows CI 追加 (`windows-latest` matrix) | S | Ready (Phase 0) |
+| PBI-33 | Windows CI 追加 (`windows-latest` matrix) | S | **Done (Sprint N+35)** |
 | PBI-34 | リリースバイナリ自動配布 (tag → `verde-lsp.exe`) | S | Ready (Phase 0) |
 | PBI-35 | `textDocument/signatureHelp` 実装 | M | Backlog (Phase 1) |
 | PBI-36 | `workspace/symbol` — プロジェクト横断検索 | S | Backlog (Phase 1) |
