@@ -15,68 +15,8 @@ const scrum: ScrumDashboard = {
   },
 
   product_backlog: [
-    {
-      id: "PBI-44",
-      story: {
-        role: "VBA開発者",
-        capability: "Class module (.cls) の Me キーワードとインスタンス変数に対して補完・hover・goto-def を使う",
-        benefit: "クラスベース VBA 開発でも IDE 支援が得られ生産性が向上する",
-      },
-      acceptance_criteria: [
-        {
-          criterion: "Class モジュールの Property/Method 定義が SymbolTable に登録される",
-          verification: "cargo test でシンボル登録テストが green",
-        },
-        {
-          criterion: "`Me.` で当該クラスのメンバーが補完候補に現れる",
-          verification: "completion テストが green",
-        },
-        {
-          criterion: "インスタンス変数に hover すると型情報が表示される",
-          verification: "hover テストが green",
-        },
-        {
-          criterion: "goto-def でメンバー定義行にジャンプできる",
-          verification: "definition テストが green",
-        },
-        {
-          criterion: "cargo clippy -D warnings 0 件 / cargo fmt pass",
-          verification: "just clippy && just fmt",
-        },
-      ],
-      status: "done",
-    },
-    {
-      id: "PBI-45",
-      story: {
-        role: "VBA開発者",
-        capability: "PivotTable / Chart / Shape 等の Excel オブジェクトモデルを補完候補で選択できる",
-        benefit: "Excel 高度操作の API 名をタイプミスせず入力できる",
-      },
-      acceptance_criteria: [
-        {
-          criterion: "`Dim pt As PivotTable\\npt.` と入力した時点で PivotTable の主要プロパティ・メソッドが補完候補に現れる",
-          verification: "pt_dot_completion_returns_pivottable_members テストが green",
-        },
-        {
-          criterion: "`Dim ch As Chart\\nch.` と入力した時点で Chart の主要プロパティ・メソッドが補完候補に現れる",
-          verification: "chart_dot_completion_returns_chart_members テストが green",
-        },
-        {
-          criterion: "`Dim sh As Shape\\nsh.` と入力した時点で Shape の主要プロパティ・メソッドが補完候補に現れる",
-          verification: "shape_dot_completion_returns_shape_members テストが green",
-        },
-        {
-          criterion: "既存 Range / Worksheet / Workbook / Application の dot-access 補完が引き続き動作する",
-          verification: "既存 completion テスト群が green のまま維持される",
-        },
-        {
-          criterion: "cargo clippy -D warnings 0 件 / cargo fmt pass",
-          verification: "just clippy && just fmt",
-        },
-      ],
-      status: "done",
-    },
+    { id: "PBI-44", story: { role: "VBA開発者", capability: "Me キーワードとインスタンス変数 補完/hover/goto-def", benefit: "クラスベース VBA 開発でも IDE 支援" }, acceptance_criteria: [], status: "done" },
+    { id: "PBI-45", story: { role: "VBA開発者", capability: "PivotTable/Chart/Shape 補完候補", benefit: "API 名タイプミス防止" }, acceptance_criteria: [], status: "done" },
     {
       id: "PBI-46",
       story: {
@@ -87,10 +27,18 @@ const scrum: ScrumDashboard = {
       acceptance_criteria: [
         {
           criterion: "textDocument/formatting で indent 整形が機能する",
-          verification: "formatting テストが green",
+          verification: "formatting テストが green (既存 8 + 新規 indent tests)",
+        },
+        {
+          criterion: "ElseIf/Else/Case は depth-1 (VBA 慣習) — テストで文書化",
+          verification: "format_indent_else_if_aligned_with_if / format_indent_select_case テストが green",
+        },
+        {
+          criterion: "cargo clippy -D warnings 0 件 / cargo fmt pass",
+          verification: "just clippy && just fmt",
         },
       ],
-      status: "draft",
+      status: "done",
     },
   ],
 
@@ -105,6 +53,13 @@ const scrum: ScrumDashboard = {
   },
 
   completed: [
+    {
+      number: 51,
+      pbi_id: "PBI-46 (β)",
+      goal: "indent 正規化 (depth tracking) — Sub/If/For/With/Select/Do/While/Type でネスト、ElseIf/Else/Case は depth-1 例外、Public/Private 修飾子スキップ",
+      status: "done",
+      subtasks: [],
+    },
     {
       number: 50,
       pbi_id: "PBI-46 (α)",
@@ -151,36 +106,25 @@ const scrum: ScrumDashboard = {
 
   retrospectives: [
     {
-      sprint: 46,
+      sprint: 51,
       improvements: [
         {
-          action: "Tidy First の per-member span が goto-def 精度を解決した — 構造変更が振る舞い変更を代替するパターンを踏襲する",
+          action: "calculate_line_indents pure helper 先行 (Tidy First) → apply_formatting 配線の順序が Sprint β でも機能した — 構造変更と振る舞い変更の分離パターンを次 PBI でも踏襲する",
           timing: "sprint",
           status: "completed",
-          outcome: "Sprint N+47 で hover/goto-def が実装変更ゼロで動作することを確認",
+          outcome: "165 green (前 155 + 新規 10) / clippy 0 / fmt pass",
         },
         {
-          action: "cargo fmt 後の #[test] 属性重複/消失バグを避けるためテスト挿入位置に注意する",
+          action: "ElseIf/Else/Case depth-1 例外を実装前にテストで文書化 (Sprint N+50 KPT Try 達成) — 仕様曖昧さを解消してから実装できた",
           timing: "sprint",
           status: "completed",
-          outcome: "Sprint N+47 で cat >> でテスト追記後に cargo fmt を適用して解消",
-        },
-      ],
-    },
-    {
-      sprint: 47,
-      improvements: [
-        {
-          action: "Me. 特殊ケースを追加するだけで Class module の補完が実現できた — 既存の dot-access 設計が拡張点として機能した",
-          timing: "sprint",
-          status: "completed",
-          outcome: "Sprint N+48 で同パターンを PivotTable/Chart/Shape へ適用し、builtin type fallback として一般化に成功",
+          outcome: "format_indent_else_if_aligned_with_if + format_indent_select_case_aligned_with_select テストが仕様書として機能",
         },
         {
-          action: "テスト追記は cat >> より Edit ツールを使う方が fmt 差分を事前に制御しやすい",
+          action: "first_block_token で Public/Private/Friend/Static をスキップする設計 — Declare Function のような外部宣言を誤って open token 扱いしない安全設計",
           timing: "sprint",
           status: "completed",
-          outcome: "Sprint N+48 で Edit ツールをテスト追記に使用し、fmt 差分ゼロを維持",
+          outcome: "format_indent_public_sub_open_token テストで検証済み",
         },
       ],
     },
@@ -190,66 +134,20 @@ const scrum: ScrumDashboard = {
         {
           action: "apply_formatting の pure function 先行 → LSP handler 配線の Tidy First 順序を Sprint β (N+51) でも維持する",
           timing: "sprint",
-          status: "active",
-          outcome: null,
+          status: "completed",
+          outcome: "Sprint N+51 で calculate_line_indents pure helper 先行 → apply_formatting 配線の順序で実現",
         },
         {
           action: "indent 正規化 (β) では ElseIf/Else/Case の depth 例外処理を先にテストで文書化し、実装前に仕様を確定する",
           timing: "sprint",
-          status: "active",
-          outcome: null,
+          status: "completed",
+          outcome: "Sprint N+51 で format_indent_else_if_aligned_with_if + format_indent_select_case テストで文書化達成",
         },
         {
           action: "document_end_position の UTF-16 encode_utf16().count() パターンを indent 正規化後も維持 (文字列リテラル内 Unicode 対応)",
           timing: "sprint",
-          status: "active",
-          outcome: null,
-        },
-      ],
-    },
-    {
-      sprint: 49,
-      improvements: [
-        {
-          action: "token-based formatting (AST 不使用) を採用 — lex() の SpannedToken.text vs canonical 比較で keyword case を純粋関数として実装する",
-          timing: "sprint",
-          status: "active",
-          outcome: null,
-        },
-        {
-          action: "Sprint α (N+50): keyword case + 行末空白、Sprint β (N+51): indent の 2 分割で実装する",
-          timing: "sprint",
-          status: "active",
-          outcome: null,
-        },
-        {
-          action: "演算子スペース整形 (`=` 曖昧性) は AST 依存のため defer — MVP 外と明示してスコープ creep を防ぐ",
-          timing: "product",
-          status: "active",
-          outcome: null,
-        },
-      ],
-    },
-    {
-      sprint: 48,
-      improvements: [
-        {
-          action: "excel_model/types.rs への型定義追加 → completion.rs の fallback 実装という Tidy First 順序を維持する",
-          timing: "sprint",
-          status: "active",
-          outcome: null,
-        },
-        {
-          action: "regression テスト (existing_range_dot_completion_still_works) を各 PBI で必ず追加し、既存補完の劣化を即検出できる体制を保つ",
-          timing: "sprint",
-          status: "active",
-          outcome: null,
-        },
-        {
-          action: "PBI-46 (textDocument/formatting) 着手前にスコープ見積もりを行い、indent 整形のみ / case 整形のみ に分割できるか検討する",
-          timing: "sprint",
-          status: "active",
-          outcome: null,
+          status: "completed",
+          outcome: "Sprint N+51: indent 正規化は行頭ホワイトスペースのみ置換 — UTF-16 座標計算は LSP handler 側 (変更なし) が担当",
         },
       ],
     },

@@ -1,30 +1,145 @@
-use crate::parser::lexer::{lex, Token};
+use crate::parser::lexer::{lex, SpannedToken, Token};
 
 pub fn apply_formatting(src: &str) -> String {
+    // Phase 1: keyword case normalization (token gap preservation)
     let tokens = lex(src);
-    let mut result = String::with_capacity(src.len());
+    let mut keyword_normalized = String::with_capacity(src.len());
     let mut pos = 0usize;
 
     for st in &tokens {
-        result.push_str(&src[pos..st.span.start]);
+        keyword_normalized.push_str(&src[pos..st.span.start]);
         match keyword_canonical(&st.token) {
-            Some(canonical) => result.push_str(canonical),
-            None => result.push_str(st.text.as_str()),
+            Some(canonical) => keyword_normalized.push_str(canonical),
+            None => keyword_normalized.push_str(st.text.as_str()),
         }
         pos = st.span.end;
     }
-    result.push_str(&src[pos..]);
+    keyword_normalized.push_str(&src[pos..]);
 
-    let trailing_newline = result.ends_with('\n');
-    let mut formatted: String = result
-        .lines()
-        .map(str::trim_end)
-        .collect::<Vec<_>>()
-        .join("\n");
+    // Phase 2: indent normalization + trailing whitespace removal
+    let indents = calculate_line_indents(&keyword_normalized);
+    let trailing_newline = keyword_normalized.ends_with('\n');
+
+    let lines: Vec<&str> = keyword_normalized.lines().collect();
+    let mut formatted = String::with_capacity(src.len());
+
+    for (i, line) in lines.iter().enumerate() {
+        let depth = indents.get(i).copied().unwrap_or(0);
+        let trimmed = line.trim();
+
+        if i > 0 {
+            formatted.push('\n');
+        }
+
+        if !trimmed.is_empty() {
+            for _ in 0..depth * 4 {
+                formatted.push(' ');
+            }
+            formatted.push_str(trimmed);
+        }
+    }
+
     if trailing_newline {
         formatted.push('\n');
     }
+
     formatted
+}
+
+/// Computes the indent depth (in units of 4 spaces) for each line in `src`.
+///
+/// Returns one `usize` per line (matching `src.lines()` iteration order).
+/// Blank lines always get depth 0.
+pub fn calculate_line_indents(src: &str) -> Vec<usize> {
+    let mut depths = Vec::new();
+    let mut depth: i32 = 0;
+
+    for line in src.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.is_empty() {
+            depths.push(0);
+            continue;
+        }
+
+        let tokens = lex(trimmed);
+        let first = tokens.first().map(|st| &st.token);
+
+        let line_depth = match first {
+            Some(t) if is_close_token(t) => {
+                depth = (depth - 1).max(0);
+                depth as usize
+            }
+            Some(t) if is_midblock_token(t) => (depth - 1).max(0) as usize,
+            _ => depth as usize,
+        };
+
+        depths.push(line_depth);
+
+        // Increment depth AFTER printing for open tokens (skip access modifiers)
+        if let Some(t) = first_block_token(&tokens) {
+            if is_open_token(t) {
+                depth += 1;
+            }
+        }
+    }
+
+    depths
+}
+
+/// Returns the first token that is not an access modifier.
+///
+/// Handles `Public Sub Foo()` / `Private Function Bar()` correctly by
+/// skipping `Public`/`Private`/`Friend`/`Static` before the block keyword.
+fn first_block_token(tokens: &[SpannedToken]) -> Option<&Token> {
+    for st in tokens {
+        match &st.token {
+            Token::Public | Token::Private | Token::Friend | Token::Static => continue,
+            t => return Some(t),
+        }
+    }
+    None
+}
+
+fn is_open_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Sub
+            | Token::Function
+            | Token::Property
+            | Token::If
+            | Token::For
+            | Token::Do
+            | Token::While
+            | Token::Select
+            | Token::With
+            | Token::Type
+            | Token::Enum
+    )
+}
+
+fn is_close_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::EndSub
+            | Token::EndFunction
+            | Token::EndProperty
+            | Token::EndIf
+            | Token::Next
+            | Token::Loop
+            | Token::Wend
+            | Token::EndSelect
+            | Token::EndWith
+            | Token::EndType
+            | Token::EndEnum
+    )
+}
+
+/// Midblock tokens are printed at `depth - 1` but do NOT change `depth`.
+///
+/// VBA convention: `ElseIf`/`Else` align with `If`; `Case` aligns with `Select Case`.
+fn is_midblock_token(token: &Token) -> bool {
+    matches!(token, Token::ElseIf | Token::Else | Token::Case)
 }
 
 fn keyword_canonical(token: &Token) -> Option<&'static str> {
