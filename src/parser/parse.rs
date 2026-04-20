@@ -1365,4 +1365,22 @@ mod tests {
             other => panic!("expected Exit statement, got {:?}", other),
         }
     }
+
+    #[test]
+    #[ignore = "BUG-01: parse_variable does not consume Dim, causing infinite loop"]
+    fn parse_module_level_bare_dim_variable() {
+        let result = parse("Dim m As String\n");
+        let var = result.ast.root.iter().find_map(|&id| {
+            if let AstNode::Variable(v) = &result.ast.nodes[id] {
+                Some(v)
+            } else {
+                None
+            }
+        });
+        let var = var.expect("expected VariableNode for module-level 'Dim m'");
+        assert_eq!(var.name.as_str(), "m");
+        assert_eq!(var.type_name.as_deref(), Some("String"));
+        assert!(matches!(var.visibility, Visibility::Private));
+        assert!(!var.is_const);
+    }
 }
