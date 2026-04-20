@@ -1,5 +1,5 @@
 use tower_lsp::lsp_types::{CompletionItemKind, Position, Url};
-use verde_lsp::analysis::AnalysisHost;
+use verde_lsp::analysis::{AnalysisHost, WorkbookContext};
 use verde_lsp::completion;
 use verde_lsp::parser;
 
@@ -102,5 +102,30 @@ fn completion_includes_public_symbols_from_other_files() {
         items.iter().any(|s| s == "Foo"),
         "expected 'Foo' from module_a in completion candidates for module_b, got: {:?}",
         items
+    );
+}
+
+#[test]
+fn completion_includes_workbook_sheet_names() {
+    let uri: Url = "file:///test.bas".parse().unwrap();
+    let src = "Sub Main()\nEnd Sub\n";
+    let host = AnalysisHost::new();
+    host.update(uri.clone(), src.to_string(), parser::parse(src));
+    host.set_workbook_context(WorkbookContext {
+        sheets: vec!["Sheet1".to_string(), "DataSheet".to_string()],
+    });
+
+    let items: Vec<String> = completion::complete(&host, &uri, Position::new(0, 0))
+        .into_iter()
+        .map(|i| i.label)
+        .collect();
+
+    assert!(
+        items.iter().any(|s| s == "Sheet1"),
+        "expected 'Sheet1' from workbook context in completions, got: {items:?}"
+    );
+    assert!(
+        items.iter().any(|s| s == "DataSheet"),
+        "expected 'DataSheet' from workbook context in completions, got: {items:?}"
     );
 }
