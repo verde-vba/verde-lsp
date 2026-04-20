@@ -6,11 +6,37 @@ use crate::analysis::AnalysisHost;
 use crate::parser::ast::ProcedureKind;
 
 pub fn hover(host: &AnalysisHost, uri: &Url, position: Position) -> Option<Hover> {
-    // Try current file first
+    // Try current file first, preferring symbols scoped to the cursor's procedure.
     let result = host.with_source(uri, |symbols, source| {
         let word = resolve::find_word_at_position(source, position)?;
         let matches = resolve::find_symbol_by_name(symbols, &word);
-        let sym = matches.first()?;
+
+        let sym = {
+            let cursor_offset = resolve::position_to_offset(source, position);
+            let containing_proc = cursor_offset.and_then(|off| {
+                symbols
+                    .proc_ranges
+                    .iter()
+                    .find(|(_, r)| off >= r.start as usize && off <= r.end as usize)
+                    .map(|(name, _)| name.clone())
+            });
+
+            if let Some(ref proc_name) = containing_proc {
+                matches
+                    .iter()
+                    .find(|s| {
+                        s.proc_scope
+                            .as_ref()
+                            .map(|p| p.eq_ignore_ascii_case(proc_name))
+                            .unwrap_or(false)
+                    })
+                    .copied()
+                    .or_else(|| matches.first().copied())
+            } else {
+                matches.first().copied()
+            }
+        }?;
+
         Some(symbol_to_hover(sym))
     });
     if let Some(Some(h)) = result {
@@ -61,7 +87,13 @@ fn symbol_to_hover(sym: &Symbol) -> Hover {
         SymbolDetail::EnumDef { members } => {
             format!("Enum {} ({} members)", sym.name, members.len())
         }
-        SymbolDetail::None => sym.name.to_string(),
+        SymbolDetail::None => {
+            if let Some(ref t) = sym.type_name {
+                format!("{} As {}", sym.name, t)
+            } else {
+                sym.name.to_string()
+            }
+        }
     };
 
     Hover {
