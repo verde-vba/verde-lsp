@@ -1,14 +1,32 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-20 (Sprint N+9 完了)
-> 現在ブランチ: main (最新: e579320)
+> 最終更新: 2026-04-20 (Sprint N+10 バックログリファインメント完了)
+> 現在ブランチ: main (最新: d32a276)
 > テスト基準: 63 green (lib 36 + integration 27), cargo clippy -D warnings 0 件
 
 ---
 
 ## 次 Sprint 推奨 (Sprint N+10)
 
-候補: **PBI-09** — 複数ファイル対応・クロスモジュール補完 (Large) または **PBI-02** — 手続きパラメータ hover シグネチャ表示 (Small)
+**Sprint Goal**: PBI-09a を完遂し、クロスモジュール補完の MVP を届ける
+
+### PBI-09a — クロスモジュール補完 MVP (Small) ✅ Ready
+
+| 項目 | 内容 |
+|------|------|
+| **目的** | 同一ワークスペース内の別ファイルに定義された `Public Sub/Function/変数` を補完候補に含める。 |
+| **背景** | `AnalysisHost.files` は既に `DashMap<Url, FileAnalysis>` — ワークスペース管理の骨格は完備。`all_public_symbols()` 集約メソッドを追加し `complete()` に繋げるだけで実現できる。 |
+| **受入基準** | (1) ファイル A の `Public Sub Foo()` がファイル B での補完候補に出る。(2) `cargo test` 64+ green, clippy 0 件 |
+| **実装方針** | `AnalysisHost` に `all_public_symbols() -> Vec<&Symbol>` を追加（全ファイルを iterate し `Visibility::Public` なシンボルを集約）→ `complete()` で現ファイルのスコープフィルタ後に Public シンボルを末尾追加 → 2 ファイルシナリオの統合テスト 1 件 |
+| **見積サイズ** | S |
+| **依存** | なし |
+
+### 事前 Tidy (Sprint N+10 開始前に 1 コミット)
+
+`symbols.rs:197` の `let _ = value;` を `let _value = value;` にリネーム。  
+EnumMember の `Option<i64>` 値は将来使う意図で存在するが、`let _` は「完全に捨てる」という誤読を招く。1 行・動作変更なし。
+
+---
 
 ---
 
@@ -68,20 +86,17 @@
 
 ---
 
-### 候補: PBI-09 — 複数ファイル対応・クロスモジュール補完 (Large)
+### 候補: PBI-09 — 複数ファイル対応・クロスモジュール補完 (→ PBI-09a に Small 分割済み)
 
-| 項目 | 内容 |
-|------|------|
-| **目的** | 現状は単一ファイルの補完のみ。複数モジュール間で Public Sub/Function/変数を参照できるようにし、実際の VBA プロジェクト規模に対応する。 |
-| **受入基準** | (1) モジュール A の `Public Sub Foo()` がモジュール B での補完候補に出る。(2) `cargo test` 63+ green, clippy 0 件 |
-| **見積サイズ** | L (AnalysisHost の workspace 管理拡張が必要) |
-| **依存** | なし |
+元 Large PBI。`AnalysisHost.files` が既に `DashMap<Url, FileAnalysis>` であることが判明し、Sprint N+10 でのリファインメントにより PBI-09a として Small 化。残余分（hover/goto-def への拡張など）は PBI-09b 以降で対応。
 
 ---
 
 ## プロダクトバックログ
 
-*アクティブな Ready PBI なし。次の大型 PBI (PBI-09) はバックログリファインメントが必要。*
+| PBI | タイトル | サイズ | 状態 |
+|-----|----------|--------|------|
+| PBI-09a | クロスモジュール補完 MVP | S | **Ready** |
 
 ---
 
