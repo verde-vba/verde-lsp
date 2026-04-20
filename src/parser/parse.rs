@@ -602,6 +602,10 @@ impl<'a> Parser<'a> {
                 let (tokens, span) = self.collect_statement_tokens();
                 StatementNode::Exit(ExitStatementNode { tokens, span })
             }
+            Some(Token::GoTo) => {
+                let (tokens, span) = self.collect_statement_tokens();
+                StatementNode::GoTo(GoToStatementNode { tokens, span })
+            }
             _ => StatementNode::Expression(self.parse_expression_statement()),
         };
         AstNode::Statement(stmt)
@@ -1306,6 +1310,22 @@ mod tests {
                 );
             }
             other => panic!("expected Redim statement, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_captures_goto_as_goto_statement() {
+        let result = parse("Sub F()\n    GoTo MyLabel\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.body.len(), 1, "expected 1 body statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::GoTo(node) => {
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::GoTo),
+                    "expected the GoTo keyword inside captured tokens"
+                );
+            }
+            other => panic!("expected GoTo statement, got {:?}", other),
         }
     }
 
