@@ -1,8 +1,52 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+27 完了)
+> 最終更新: 2026-04-21 (Sprint N+28 完了)
 > 現在ブランチ: main
-> テスト基準: 99 green (lib 37 + integration 62), cargo clippy -D warnings 0 件
+> テスト基準: 100 green (lib 38 + integration 62), cargo clippy -D warnings 0 件
+
+---
+
+## Sprint N+28 (2026-04-21)
+
+### Sprint Goal
+PBI-26: `SymbolDetail::None` 完全廃止 — EnumMember 用の専用バリアントを追加し、`None` を enum から削除する。全 `SymbolDetail` variant が対応する `SymbolKind` に紐付く設計に揃える。
+
+### Path Chosen
+Option (A) — `SymbolDetail::EnumMember { parent_enum: SmolStr, value: Option<i64> }` を新設。`build_symbol_table` の EnumMember 登録を `None → EnumMember` に変更。`hover.rs` の `None` ブランチを `EnumMember` 専用レンダリング (`"Color.Red"` / `"Color.Red = 0"`) に置換。`SymbolDetail::None` を enum 定義から削除。
+
+### Scope
+- `src/analysis/symbols.rs` から `SymbolDetail::None` を削除し、`EnumMember` を追加 (RED→GREEN)
+- `src/hover.rs` の `None` ブランチを `EnumMember` ブランチに置換
+- テスト 1 件追加: `enum_member_symbol_has_enum_member_detail`
+
+### Acceptance Criteria
+1. `SymbolDetail::None` バリアントが削除されている
+2. `SymbolDetail::EnumMember` が存在し、EnumMember シンボルに使われる
+3. hover で EnumMember が `EnumName.MemberName` 形式で表示される (value がある場合は `= N` 付き)
+4. cargo test 99 → 100 green, clippy -D warnings 0 件
+
+---
+
+## Sprint N+28 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-26 SymbolDetail::None 完全廃止」を完全達成。PBI-25 と合わせて `SymbolDetail` 6 variant (None 含む) → 5 variant + 全て semantic に対応する SymbolKind を持つ設計へ改善。
+
+### KPT
+
+#### Keep
+- PBI-25 の延長線上で設計方向性が既に定まっていたため、RED→GREEN のサイクルが variant 追加/廃止のみに集中できた。REFACTOR 不要。
+- Rust の `match` exhaustiveness により、`None` 削除時に `hover.rs` のみが影響範囲と即座に特定できた。型システムが移行を安全にガイド。
+- `SymbolDetail::EnumMember` に `value` フィールドを持たせたことで、将来の parser 改善 (enum value parsing) がそのまま hover 表示に反映される拡張点が用意された。
+
+#### Problem
+- RED フェーズで `value: Some(0)` を期待したが、パーサーが Enum の `= N` を読まない既知制限のため `None` でしか返らず、テストを弱める調整が必要になった (probe 不足)。
+- Enum value parsing は別課題 — `src/parser/parse.rs` line 800 の `members.push((text, None))` が hardcoded None。
+
+#### Try
+- PBI-27 候補: Enum value parsing 対応 (`Enum X; A = 1; B = 2; End Enum` の右辺を読み `Option<i64>` に格納)。hover の `EnumMember` レンダリングが即座に活用される。
+- RED テストを書く前に parser 側の挙動を軽く probe する習慣 (特に既存機能の前提を使う場合)。
 
 ---
 
@@ -334,6 +378,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-23 | goto-def scope-aware (同名パラメータを含む procedure で正しくジャンプ) | XS | **Done** |
 | PBI-24 | hover scope-aware (同名パラメータを含む procedure で正しい型を表示) | XS | **Done** |
 | PBI-25 | SymbolDetail::Parameter 追加 — パラメータ登録の設計改善 | XS | **Done** |
+| PBI-26 | SymbolDetail::None 完全廃止 — EnumMember バリアント追加 | XS | **Done** |
 
 ---
 
