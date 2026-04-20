@@ -352,5 +352,5 @@ PBI-43 を完全達成。Tidy First 2 件 (TypeDefNode.members に per-member sp
 - cargo test 並列化チューニング: >60s 警告散発対策として `-- --test-threads=4` など設定を検討。CI では影響なし。
 - `v0.1.0` タグ push で `release.yml` の動作検証 (3 OS matrix + artifact 添付確認)。
 - Named arguments (`Foo x:=1`) の signatureHelp 対応 (VBA での使用頻度は低い、将来課題)。
-- `workbook_context` 読み取り helper 抽出 (3 箇所の `.expect()` 文字列重複解消、優先度低)。
+- ~~`workbook_context` 読み取り helper 抽出 (3 箇所の `.expect()` 文字列重複解消、優先度低)。~~ **Done** (f31ab09)
 - E2E stdio テスト (`stdio_lifecycle_completes_gracefully`) を Windows CI matrix に追加 (release.yml または ci.yml)。
