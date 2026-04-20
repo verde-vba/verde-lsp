@@ -875,6 +875,79 @@ mod tests {
     }
 
     #[test]
+    fn parse_procedure_captures_dotted_udt_type() {
+        let result = parse("Sub Foo(x As ADODB.Connection)\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.params.len(), 1, "expected 1 parameter");
+        let p = parameter(&result.ast, proc.params[0]);
+        assert_eq!(p.name.as_str(), "x");
+        assert_eq!(
+            p.type_name.as_ref().map(|s| s.as_str()),
+            Some("ADODB.Connection")
+        );
+    }
+
+    #[test]
+    fn parse_procedure_captures_deeply_dotted_type() {
+        let result = parse("Sub Foo(x As Microsoft.Office.Core.CommandBar)\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.params.len(), 1, "expected 1 parameter");
+        let p = parameter(&result.ast, proc.params[0]);
+        assert_eq!(
+            p.type_name.as_ref().map(|s| s.as_str()),
+            Some("Microsoft.Office.Core.CommandBar")
+        );
+    }
+
+    #[test]
+    fn parse_procedure_handles_multiline_parameter_list() {
+        let source = "Sub Foo(ByVal a As Long, _\n        ByVal b As String, _\n        c As Variant)\nEnd Sub\n";
+        let result = parse(source);
+        let proc = first_procedure(&result.ast);
+        assert_eq!(
+            proc.params.len(),
+            3,
+            "expected 3 parameters, got {}",
+            proc.params.len()
+        );
+        let a = parameter(&result.ast, proc.params[0]);
+        let b = parameter(&result.ast, proc.params[1]);
+        let c = parameter(&result.ast, proc.params[2]);
+        assert_eq!(a.name.as_str(), "a");
+        assert_eq!(b.name.as_str(), "b");
+        assert_eq!(c.name.as_str(), "c");
+        assert_eq!(a.type_name.as_ref().map(|s| s.as_str()), Some("Long"));
+        assert_eq!(b.type_name.as_ref().map(|s| s.as_str()), Some("String"));
+        assert_eq!(c.type_name.as_ref().map(|s| s.as_str()), Some("Variant"));
+        assert_eq!(a.passing, ParameterPassing::ByVal, "a should be ByVal");
+        assert_eq!(b.passing, ParameterPassing::ByVal, "b should be ByVal");
+    }
+
+    #[test]
+    fn parse_procedure_handles_multiline_with_dotted_types() {
+        let source =
+            "Sub Foo(x As ADODB.Connection, _\n        y As Scripting.Dictionary)\nEnd Sub\n";
+        let result = parse(source);
+        let proc = first_procedure(&result.ast);
+        assert_eq!(
+            proc.params.len(),
+            2,
+            "expected 2 parameters, got {}",
+            proc.params.len()
+        );
+        let x = parameter(&result.ast, proc.params[0]);
+        let y = parameter(&result.ast, proc.params[1]);
+        assert_eq!(
+            x.type_name.as_ref().map(|s| s.as_str()),
+            Some("ADODB.Connection")
+        );
+        assert_eq!(
+            y.type_name.as_ref().map(|s| s.as_str()),
+            Some("Scripting.Dictionary")
+        );
+    }
+
+    #[test]
     fn parse_procedure_body_range_excludes_signature() {
         let source = "Sub Foo(x As Long)\n    y = x\nEnd Sub\n";
         let result = parse(source);
