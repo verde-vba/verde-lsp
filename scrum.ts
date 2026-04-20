@@ -75,7 +75,7 @@ const scrum: ScrumDashboard = {
           verification: "just clippy && just fmt",
         },
       ],
-      status: "ready",
+      status: "done",
     },
     {
       id: "PBI-46",
@@ -98,14 +98,16 @@ const scrum: ScrumDashboard = {
     number: 48,
     pbi_id: "PBI-45",
     goal: "PivotTable / Chart / Shape の dot-access 補完が動作し、既存 Range/Worksheet/Workbook/Application の補完が引き続き green であること",
-    status: "planning",
+    status: "review",
     subtasks: [
       {
         test: "既存 dot_access_prefix_triggers_udt_member_completion, me_dot_completion_returns_module_members など既存テスト群",
         implementation: "src/excel_model/types.rs に PivotTable / Chart / Shape の ExcelObjectType 定義を追加 (プロパティ・メソッドリスト含む) — 振る舞い変更なし",
         type: "structural",
-        status: "pending",
-        commits: [],
+        status: "completed",
+        commits: [
+          { hash: "755da02", message: "feat(pbi-45/tidy): add PivotTable / Chart / Shape ExcelObjectType definitions", phase: "green" },
+        ],
         notes: [
           "Tidy First: 型定義追加のみ。complete_dot_access は変更しない",
           "PivotTable: Name/DataBodyRange/PivotFields/TableRange1 等の主要プロパティ + RefreshTable/ClearTable メソッド",
@@ -117,24 +119,28 @@ const scrum: ScrumDashboard = {
         test: "pt_dot_completion_returns_pivottable_members, chart_dot_completion_returns_chart_members, shape_dot_completion_returns_shape_members",
         implementation: "failing tests only — complete_dot_access はまだ変更しない (RED フェーズ)",
         type: "behavioral",
-        status: "pending",
-        commits: [],
+        status: "completed",
+        commits: [
+          { hash: "98f9857", message: "test(pbi-45/red): add failing tests for PivotTable/Chart/Shape/Range dot-access", phase: "green" },
+        ],
         notes: [
           "tests/completion.rs に PBI-45 セクションを追加",
           "do_complete_at ヘルパーを流用: 'Dim pt As PivotTable\\npt.' パターン",
-          "3 テストすべて cargo test で RED になることを確認してから GREEN フェーズへ",
+          "4 テストすべて cargo test で RED になることを確認してから GREEN フェーズへ",
         ],
       },
       {
         test: "pt_dot_completion_returns_pivottable_members, chart_dot_completion_returns_chart_members, shape_dot_completion_returns_shape_members",
         implementation: "complete_dot_access に Excel builtin type フォールバックを追加: UdtMember が見つからない場合 load_builtin_types() から type_name に一致する ExcelObjectType を検索してプロパティ+メソッドを返す",
         type: "behavioral",
-        status: "pending",
-        commits: [],
+        status: "completed",
+        commits: [
+          { hash: "a34f472", message: "feat(pbi-45/green): Excel builtin type fallback in complete_dot_access", phase: "green" },
+        ],
         notes: [
           "src/completion.rs の complete_dot_access: UdtMember members.is_empty() のときに excel_model::types::load_builtin_types() を参照",
           "既存 Range/Worksheet/Workbook/Application も同パスで動作するようになる",
-          "just clippy && just fmt で 0 件確認後にコミット",
+          "clippy -D warnings 0 件 / cargo fmt --check pass 確認済み",
         ],
       },
     ],
