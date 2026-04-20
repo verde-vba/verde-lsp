@@ -1,8 +1,8 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+32 完了 + 詳細ロードマップ策定)
+> 最終更新: 2026-04-21 (Sprint N+33 完了 — PBI-31 UTF-16 対応)
 > 現在ブランチ: main
-> テスト基準: 104 green (lib 42 + integration 62), cargo clippy -D warnings 0 件
+> テスト基準: 108 green (lib 46 + integration 62), cargo clippy -D warnings 0 件
 
 ---
 
@@ -75,6 +75,59 @@ parser 拡張を含むため工数大。Phase 1/2 で体験が整った後に着
 - Phase 0 の UTF-16 バグ (PBI-31) は**実害が出る前に**潰す。現状 BMP 日本語 (ひらがな/漢字) は偶然動くが、文字列リテラルの emoji 等で破綻
 - Class module (PBI-44) の優先度は Verde 利用プロジェクトに `.cls` がどれだけ含まれるかで変動 — 要データ収集
 - formatting (PBI-46) は「既存開発者」軸なら Phase 1 に繰り上げる余地あり
+
+---
+
+## Sprint N+33 (2026-04-21)
+
+### Sprint Goal
+PBI-31 (Phase 0 最優先): `position_to_offset` / `offset_to_position` を UTF-16 code unit ベースに変更し LSP 準拠にする。astral plane 文字 (emoji や数学記号 U+1D54F など) で goto-def / hover / rename が 1 文字ずれる実害バグを、Windows 配布・Verde desktop 組み込み前に潰す。
+
+### Path Chosen
+RED → GREEN の 2 commit:
+1. `src/analysis/resolve.rs` に test モジュール追加 (ASCII / BMP / astral plane / text_range_to_lsp_range の 4 テスト)
+2. `position_to_offset` と `offset_to_position` の `col += 1` を `col += ch.len_utf16() as u32` へ対称的に変更 (2 行)
+
+REFACTOR なし: 置換のみで意図が明瞭、helper 抽出は YAGNI。
+
+### Scope
+- `src/analysis/resolve.rs`: test module 追加 + 関数内 col 増分を UTF-16 対応
+- `plan.md`: 詳細ロードマップ (Phase 0-4) 策定 commit を分離
+
+### Acceptance Criteria
+1. LSP Position が UTF-16 code unit として解釈される
+2. BMP 日本語 (ひらがな/漢字) の既存挙動は不変 (回帰なし)
+3. 104 → 108 green (lib 42 → 46 に 4 テスト追加)
+4. cargo clippy -D warnings 0 件, cargo fmt --check pass
+
+### Result
+108 green / clippy 0 件 / fmt pass。差分は `src/analysis/resolve.rs` +41/-2 (test 39 行 + fix 2 行)。Sprint N+32 retrospective Try の named struct 候補より Phase 0 UTF-16 の方が優先度が明確に高いため、Option B を選択。
+
+---
+
+## Sprint N+33 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-31 UTF-16 対応」を完全達成。Phase 0 の最優先項目を 1 Sprint・2 commit で消化。
+
+### KPT
+
+#### Keep
+- 詳細ロードマップ (Phase 0-4) を plan.md に策定してから着手したため、PBI 選択時に「Phase 0 最優先」という明示的根拠で判断できた。N+32 retrospective Try の named struct 案 (自己評価で YAGNI) より客観的に優先すべきと即断可能。
+- `ch.len_utf16()` という標準ライブラリ API が BMP=1 / astral=2 を自動で返してくれるため、サロゲートペア判定の分岐ロジックが不要。2 行の置換で済んだ。
+- RED でまず BMP と ASCII のテストを入れて既存挙動との互換性を示し、astral plane テストのみ fail させたことで、「UTF-16 化が既存の日本語ユースケースに影響しない」ことを型で (いやテストで) 保証できた。
+- `position_to_offset` と `offset_to_position` の両方向で同じ修正を入れたことで、往復変換の対称性が保たれる。片方だけ直すと rename 結果が壊れた可能性あり。
+
+#### Problem
+- mid-surrogate の column (astral plane 文字の 2 番目の UTF-16 unit を指す位置) が来た場合、`position_to_offset` は silently `Some(source.len())` にフォールバックする。LSP クライアントが仕様違反の position を送った場合の挙動が曖昧。
+- `char_indices` ループは毎回先頭から走るため、長大ファイルでは O(n) コスト。大規模 VBA プロジェクトでカーソル移動のたびに呼ばれると目立つ可能性。
+- PBI-32 (`.expect()` 除去) は plan.md の cite 行が test コードを指していて**誤り**。次 Sprint では production panic 経路の再特定から始める必要がある。
+
+#### Try
+- PBI-32 を拾い直す前に `rg 'unwrap\(\)|expect\(' src/` で production の panic 経路を棚卸しし、plan.md の cite を更新する (XS で単独 commit 可能)。
+- 行単位インデックス (`Vec<usize>` of line start offsets) をキャッシュして `position_to_offset` を O(log n) にする最適化。ただし現状パフォーマンス問題は未観測 → YAGNI で後回し。
+- Verde desktop 側で `initialize` 時に `positionEncoding` capability を negotiate するか確認。LSP 3.17 以降は UTF-8 / UTF-16 / UTF-32 を選択可能で、今の実装は UTF-16 (既定) に追従した形。将来 UTF-8 対応要求が来たら切替可能な設計を検討。
 
 ---
 
