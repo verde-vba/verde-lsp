@@ -15,6 +15,7 @@ pub struct AnalysisHost {
 pub struct FileAnalysis {
     pub parse_result: ParseResult,
     pub symbols: SymbolTable,
+    pub source: String,
 }
 
 impl AnalysisHost {
@@ -24,9 +25,16 @@ impl AnalysisHost {
         }
     }
 
-    pub fn update(&self, uri: Url, parse_result: ParseResult) {
+    pub fn update(&self, uri: Url, source: String, parse_result: ParseResult) {
         let symbols = symbols::build_symbol_table(&parse_result.ast);
-        self.files.insert(uri, FileAnalysis { parse_result, symbols });
+        self.files.insert(
+            uri,
+            FileAnalysis {
+                parse_result,
+                symbols,
+                source,
+            },
+        );
     }
 
     pub fn remove(&self, uri: &Url) {
@@ -35,7 +43,7 @@ impl AnalysisHost {
 
     pub fn diagnostics(&self, uri: &Url) -> Vec<Diagnostic> {
         if let Some(file) = self.files.get(uri) {
-            diagnostics::compute(&file.parse_result, &file.symbols)
+            diagnostics::compute(&file.parse_result, &file.symbols, &file.source)
         } else {
             Vec::new()
         }

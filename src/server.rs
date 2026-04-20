@@ -23,7 +23,7 @@ impl VbaLanguageServer {
 
     async fn on_change(&self, uri: Url, text: String) {
         let parse_result = parser::parse(&text);
-        self.analysis.update(uri.clone(), parse_result);
+        self.analysis.update(uri.clone(), text.clone(), parse_result);
         self.documents.insert(uri.clone(), text);
 
         let diagnostics = self.analysis.diagnostics(&uri);
