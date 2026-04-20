@@ -7,6 +7,8 @@ pub type NodeId = Idx<AstNode>;
 pub struct Ast {
     pub nodes: Arena<AstNode>,
     pub root: Vec<NodeId>,
+    /// Whether the module begins with `Option Explicit`; when true,
+    /// undeclared variable usages produce diagnostics.
     pub option_explicit: bool,
 }
 
