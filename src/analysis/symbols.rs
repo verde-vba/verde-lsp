@@ -62,6 +62,8 @@ pub enum SymbolDetail {
         value: i64,
     },
     UdtMember {
+        /// Name of the TypeDef this member belongs to.
+        parent_type: SmolStr,
         type_name: SmolStr,
     },
 }
@@ -183,18 +185,23 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                     visibility: td.visibility.clone(),
                     span: td.span,
                     detail: SymbolDetail::TypeDef {
-                        members: td.members.clone(),
+                        members: td
+                            .members
+                            .iter()
+                            .map(|(n, t, _)| (n.clone(), t.clone()))
+                            .collect(),
                     },
                     proc_scope: None,
                 });
-                for (member_name, member_type) in &td.members {
+                for (member_name, member_type, member_span) in &td.members {
                     symbols.push(Symbol {
                         name: member_name.clone(),
                         kind: SymbolKind::UdtMember,
                         type_name: member_type.clone(),
                         visibility: td.visibility.clone(),
-                        span: td.span,
+                        span: *member_span,
                         detail: SymbolDetail::UdtMember {
+                            parent_type: td.name.clone(),
                             type_name: member_type
                                 .clone()
                                 .unwrap_or_else(|| SmolStr::new("Variant")),
@@ -288,7 +295,7 @@ mod tests {
         assert!(member.is_some(), "expected UdtMember symbol 'Name'");
         let member = member.unwrap();
         match &member.detail {
-            SymbolDetail::UdtMember { type_name } => {
+            SymbolDetail::UdtMember { type_name, .. } => {
                 assert_eq!(type_name.as_str(), "String");
             }
             other => panic!("expected UdtMember detail, got {:?}", other),

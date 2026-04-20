@@ -107,8 +107,8 @@ pub enum ParameterPassing {
 pub struct TypeDefNode {
     pub name: SmolStr,
     pub visibility: Visibility,
-    /// Each member: (field_name, optional_type_name). Mirrors EnumDefNode.members layout.
-    pub members: Vec<(SmolStr, Option<SmolStr>)>,
+    /// Each member: (field_name, optional_type_name, name_span). name_span covers the member name identifier.
+    pub members: Vec<(SmolStr, Option<SmolStr>, TextRange)>,
     pub span: TextRange,
 }
 

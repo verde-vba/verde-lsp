@@ -741,7 +741,7 @@ impl<'a> Parser<'a> {
             return;
         };
 
-        let mut members: Vec<(SmolStr, Option<SmolStr>)> = Vec::new();
+        let mut members: Vec<(SmolStr, Option<SmolStr>, TextRange)> = Vec::new();
         while self.pos < self.tokens.len() {
             self.skip_newlines();
             if self.pos >= self.tokens.len() {
@@ -762,6 +762,10 @@ impl<'a> Parser<'a> {
             }
             if self.tokens[self.pos].token == Token::Identifier {
                 let member_name = self.tokens[self.pos].text.clone();
+                let member_name_span = {
+                    let s = &self.tokens[self.pos].span;
+                    TextRange::new(s.start, s.end)
+                };
                 self.pos += 1;
                 // Skip optional array-size notation `(n)` or `()`
                 if matches!(self.peek(), Some(t) if t.token == Token::LParen) {
@@ -779,7 +783,7 @@ impl<'a> Parser<'a> {
                 } else {
                     None
                 };
-                members.push((member_name, type_name));
+                members.push((member_name, type_name, member_name_span));
                 continue;
             }
             self.pos += 1;
@@ -1485,7 +1489,7 @@ mod tests {
         );
         let td = type_def(&result.ast);
         assert_eq!(td.members.len(), 3, "expected 3 members");
-        let types: Vec<Option<&str>> = td.members.iter().map(|(_, t)| t.as_deref()).collect();
+        let types: Vec<Option<&str>> = td.members.iter().map(|(_, t, _)| t.as_deref()).collect();
         assert_eq!(
             types,
             vec![Some("Integer"), Some("Double"), Some("Boolean")]
