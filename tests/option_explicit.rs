@@ -217,6 +217,48 @@ fn does_not_warn_on_do_while_with_declared_condition() {
 }
 
 #[test]
+fn qualified_module_name_not_flagged_as_undeclared() {
+    // ModuleA.bas defines Public Sub Foo; module_b.bas calls ModuleA.Foo
+    // "ModuleA" is extracted from the URI filename — must NOT produce undeclared warning
+    let uri_a: Url = "file:///workspace/ModuleA.bas".parse().unwrap();
+    let src_a = "Public Sub Foo()\nEnd Sub\n";
+
+    let uri_b: Url = "file:///workspace/module_b.bas".parse().unwrap();
+    // "M" in "ModuleA" is col=4; after_dot skips "Foo" — only "ModuleA" is at risk
+    let src_b = "Option Explicit\n\nSub Main()\n    ModuleA.Foo\nEnd Sub\n";
+
+    let host = AnalysisHost::new();
+    host.update(uri_a.clone(), src_a.to_string(), parser::parse(src_a));
+    host.update(uri_b.clone(), src_b.to_string(), parser::parse(src_b));
+
+    let diags = host.diagnostics(&uri_b);
+    assert!(
+        !diags.iter().any(|d| d.message.to_lowercase().contains("modulea")),
+        "expected no undeclared warning for ModuleA (it is a known module name), got: {diags:?}"
+    );
+}
+
+#[test]
+fn qualified_module_name_truly_unknown_still_detected() {
+    // UnknownMod is not a registered file — must still warn
+    let uri_a: Url = "file:///workspace/ModuleA.bas".parse().unwrap();
+    let src_a = "Public Sub Foo()\nEnd Sub\n";
+
+    let uri_b: Url = "file:///workspace/module_b.bas".parse().unwrap();
+    let src_b = "Option Explicit\n\nSub Main()\n    UnknownMod.Bar\nEnd Sub\n";
+
+    let host = AnalysisHost::new();
+    host.update(uri_a.clone(), src_a.to_string(), parser::parse(src_a));
+    host.update(uri_b.clone(), src_b.to_string(), parser::parse(src_b));
+
+    let diags = host.diagnostics(&uri_b);
+    assert!(
+        diags.iter().any(|d| d.message.to_lowercase().contains("unknownmod")),
+        "expected undeclared warning for UnknownMod (not a registered module), got: {diags:?}"
+    );
+}
+
+#[test]
 fn cross_module_public_symbol_not_flagged_as_undeclared() {
     // Module A: "F" in "Foo" is col=0 on its own line
     let uri_a: Url = "file:///module_a.bas".parse().unwrap();
