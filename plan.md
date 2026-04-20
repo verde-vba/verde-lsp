@@ -1,8 +1,44 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-20
-> 現在ブランチ: main (最新: 3c629a5)
-> テスト基準: 62 green (lib + integration), cargo clippy -D warnings 0 件
+> 最終更新: 2026-04-20 (Sprint N+9 完了)
+> 現在ブランチ: main (最新: e579320)
+> テスト基準: 63 green (lib 36 + integration 27), cargo clippy -D warnings 0 件
+
+---
+
+## 次 Sprint 推奨 (Sprint N+10)
+
+候補: **PBI-09** — 複数ファイル対応・クロスモジュール補完 (Large) または **PBI-02** — 手続きパラメータ hover シグネチャ表示 (Small)
+
+---
+
+## Sprint N+9 レトロスペクティブ (2026-04-20)
+
+### Sprint Goal 達成状況
+
+目標「裸の `Dim` 宣言をモジュールレベルで正しくパースし、無限ループバグを根絶する」を完全達成。
+
+### KPT
+
+#### Keep
+- `#[ignore]` 付きテストで RED を安全にコミットし、その後 fix + `#[ignore]` 削除で GREEN とする 2 コミット戦略が機能した。
+- 修正は `parse_variable()` 内 5 行以内。既存の `Const` consume パターンとの対称設計で影響範囲が明確。
+
+#### Problem
+- Sprint N+8 の技術的負債（`Public` 回避）がそのまま次スプリントの作業に繋がった。より早い段階でバグを分離・記録すべきだった。
+
+#### Try
+- バグ発見時は即座に `#[ignore]` 付き RED テストを書いてコミットし、後続 Sprint で修正する流れを定着させる。
+
+---
+
+## 完了済み (Sprint N+9)
+
+| コミット | 内容 |
+|----------|------|
+| `085e99b` | test: BUG-01 module-level bare Dim parse test (red, #[ignore]) |
+| `5e5eebb` | fix: parse_variable が Dim キーワードを consume するよう修正 |
+| `e579320` | test: completion_module_var_visible_everywhere を Dim 正規形式に戻す |
 
 ---
 
@@ -32,26 +68,14 @@
 
 ---
 
-## 次 Sprint 推奨
-
-### 最優先: BUG-01 — モジュールレベル `Dim` 無限ループ修正 (Small/Bug)
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | `parse_module()` が `Dim m As String` を処理すると `parse_variable()` が `Dim` トークンを消費しないため無限ループが発生する。`Public`/`Private` 修飾子付きなら正常動作するため、修飾子なし `Dim` のモジュールレベル宣言を正しくパースできるようにする。 |
-| **受入基準** | (1) `Dim m As String` を含むモジュールが無限ループなくパースできる。(2) `parse_variable()` が `Dim` トークンを適切に消費する。(3) 既存 62 tests 以上 green, clippy 0 件 |
-| **見積サイズ** | S (`src/parser.rs` の `parse_variable()` 周辺修正) |
-| **依存** | なし |
-| **調査メモ** | `parse_variable()` 内で `Dim` キーワードを事前に consume するか、呼び出し側 `parse_module()` が consume してから渡す方式が考えられる。既存の `Public`/`Private` 経路との対称性を確認すること。Sprint N+8 でのテスト回避コミットを revert して正規のテストに戻す。 |
-
 ### 候補: PBI-09 — 複数ファイル対応・クロスモジュール補完 (Large)
 
 | 項目 | 内容 |
 |------|------|
 | **目的** | 現状は単一ファイルの補完のみ。複数モジュール間で Public Sub/Function/変数を参照できるようにし、実際の VBA プロジェクト規模に対応する。 |
-| **受入基準** | (1) モジュール A の `Public Sub Foo()` がモジュール B での補完候補に出る。(2) `cargo test` 62+ green, clippy 0 件 |
+| **受入基準** | (1) モジュール A の `Public Sub Foo()` がモジュール B での補完候補に出る。(2) `cargo test` 63+ green, clippy 0 件 |
 | **見積サイズ** | L (AnalysisHost の workspace 管理拡張が必要) |
-| **依存** | BUG-01 完了後に取り組む方が安全 |
+| **依存** | なし |
 
 ---
 
