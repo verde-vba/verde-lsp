@@ -7,6 +7,14 @@ license = "MIT"
 repository = "https://github.com/verde-vba/verde-lsp"
 edition = "2021"
 
+[lib]
+name = "verde_lsp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "verde-lsp"
+path = "src/main.rs"
+
 [dependencies]
 tower-lsp = "0.20"
 logos = "0.15"

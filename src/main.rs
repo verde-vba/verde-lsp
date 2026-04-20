@@ -1,14 +1,5 @@
-mod parser;
-mod analysis;
-mod completion;
-mod hover;
-mod definition;
-mod rename;
-mod excel_model;
-mod vba_builtins;
-mod server;
-
 use tower_lsp::{LspService, Server};
+use verde_lsp::server;
 
 #[tokio::main]
 async fn main() {
