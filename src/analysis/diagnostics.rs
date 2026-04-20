@@ -210,6 +210,12 @@ fn scan_procedure(
                     diagnostics,
                 );
             }
+            // Exit Sub/Function/For/Do, GoTo, and On Error contain no variable
+            // references (targets are reserved words or label names), so no
+            // undeclared-identifier scan is needed.
+            StatementNode::Exit(_) => {}
+            StatementNode::GoTo(_) => {}
+            StatementNode::OnError(_) => {}
         }
     }
 }

@@ -132,6 +132,9 @@ pub enum StatementNode {
     While(WhileStatementNode),
     Do(DoStatementNode),
     Redim(RedimStatementNode),
+    Exit(ExitStatementNode),
+    GoTo(GoToStatementNode),
+    OnError(OnErrorStatementNode),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -233,6 +236,31 @@ pub struct DoStatementNode {
 /// and does not introduce new names into scope.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RedimStatementNode {
+    pub tokens: Vec<SpannedToken>,
+    pub span: TextRange,
+}
+
+/// An `Exit Sub`, `Exit Function`, `Exit For`, or `Exit Do` statement.
+/// Contains no variable references — the keyword following `Exit` is a
+/// reserved word, not an identifier.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExitStatementNode {
+    pub tokens: Vec<SpannedToken>,
+    pub span: TextRange,
+}
+
+/// A `GoTo label` statement. The target is a label name, not a variable
+/// reference, so no undeclared-identifier scan is needed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GoToStatementNode {
+    pub tokens: Vec<SpannedToken>,
+    pub span: TextRange,
+}
+
+/// An `On Error GoTo label`, `On Error Resume Next`, or `On Error GoTo 0`
+/// statement. Contains no variable references.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OnErrorStatementNode {
     pub tokens: Vec<SpannedToken>,
     pub span: TextRange,
 }
