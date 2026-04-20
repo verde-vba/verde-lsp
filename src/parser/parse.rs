@@ -381,38 +381,13 @@ impl<'a> Parser<'a> {
         }
 
         // Optional `As <Type>` clause. Supports dotted UDT names such as
-        // `ADODB.Connection` or `Microsoft.Office.Core.CommandBar` by greedily
-        // consuming `Ident (Dot Ident)*` and joining with '.'.
+        // `ADODB.Connection` or `Microsoft.Office.Core.CommandBar`.
         let mut type_name = None;
         if matches!(self.peek(), Some(t) if t.token == Token::As) {
             self.pos += 1;
-            if let Some(t) = self.peek() {
-                // Accept any type-ish token (builtin type keyword or identifier).
-                // For the AST we only record identifier-like names; a builtin
-                // type token's `text` still holds the source text.
-                let mut buf = String::from(t.text.as_str());
-                end_offset = t.span.end;
-                self.pos += 1;
-
-                // Greedily extend with `.Ident` segments so that dotted UDT
-                // type names (e.g. `ADODB.Connection`) land in a single
-                // `type_name`. Stop as soon as the next token isn't a Dot
-                // followed by an Identifier.
-                while matches!(self.peek(), Some(t) if t.token == Token::Dot)
-                    && matches!(
-                        self.tokens.get(self.pos + 1),
-                        Some(t) if t.token == Token::Identifier
-                    )
-                {
-                    self.pos += 1; // consume Dot
-                    let ident = &self.tokens[self.pos];
-                    buf.push('.');
-                    buf.push_str(ident.text.as_str());
-                    end_offset = ident.span.end;
-                    self.pos += 1;
-                }
-
-                type_name = Some(SmolStr::from(buf));
+            if let Some((name, end)) = self.parse_dotted_type_name() {
+                end_offset = end;
+                type_name = Some(name);
             }
         }
 
@@ -450,6 +425,36 @@ impl<'a> Parser<'a> {
             span: TextRange::new(start_offset, end_offset),
         });
         Some(self.ast.nodes.alloc(node))
+    }
+
+    /// Parse a type name following an `As` keyword. Starts at the first token
+    /// of the name (the `As` itself must already be consumed). Accepts any
+    /// type-ish token (builtin type keyword or identifier) for the head and
+    /// greedily extends with `.Ident` segments so dotted UDT names such as
+    /// `ADODB.Connection` or `Microsoft.Office.Core.CommandBar` land in a
+    /// single `SmolStr`. Returns the joined name and the end offset of the
+    /// last consumed token, or `None` if no type-ish token was present.
+    fn parse_dotted_type_name(&mut self) -> Option<(SmolStr, usize)> {
+        let t = self.peek()?;
+        let mut buf = String::from(t.text.as_str());
+        let mut end_offset = t.span.end;
+        self.pos += 1;
+
+        while matches!(self.peek(), Some(t) if t.token == Token::Dot)
+            && matches!(
+                self.tokens.get(self.pos + 1),
+                Some(t) if t.token == Token::Identifier
+            )
+        {
+            self.pos += 1; // consume Dot
+            let ident = &self.tokens[self.pos];
+            buf.push('.');
+            buf.push_str(ident.text.as_str());
+            end_offset = ident.span.end;
+            self.pos += 1;
+        }
+
+        Some((SmolStr::from(buf), end_offset))
     }
 
     /// Parse a local declaration starting at the Dim/Static/Const/ReDim keyword.
