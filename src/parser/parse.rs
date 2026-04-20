@@ -544,10 +544,11 @@ impl<'a> Parser<'a> {
     /// leading token. Declaration keywords (Dim/Static/Const) produce a
     /// `LocalDeclaration`; block-opening keywords (If/For/With/Select/While/Do)
     /// and array-resize keyword (ReDim) and top-level-statement keywords
-    /// (Call/Set) produce the matching `StatementNode` variant with the
-    /// header-line tokens captured. Anything else falls back to an `Expression`
-    /// statement. Callers must ensure `pos` is on the first token of the
-    /// statement; this function returns a ready-to-alloc `AstNode::Statement`.
+    /// (Call/Set/Exit/GoTo/On) produce the matching `StatementNode` variant
+    /// with the header-line tokens captured. Anything else falls back to an
+    /// `Expression` statement. Callers must ensure `pos` is on the first token
+    /// of the statement; this function returns a ready-to-alloc
+    /// `AstNode::Statement`.
     fn classify_and_parse_statement(&mut self) -> AstNode {
         let head = self.peek().map(|t| t.token.clone());
         let decl_kind = match head {
