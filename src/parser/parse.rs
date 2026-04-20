@@ -49,6 +49,19 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Advance past consecutive `LineContinuation` / `Newline` tokens. Used at
+    /// sites where a VBA `_` line continuation is legal — most notably inside
+    /// parameter lists, where a continuation may sit between a comma and the
+    /// next parameter slot, or just before a closing paren.
+    fn skip_line_continuations(&mut self) {
+        while matches!(
+            self.peek(),
+            Some(t) if t.token == Token::LineContinuation || t.token == Token::Newline
+        ) {
+            self.pos += 1;
+        }
+    }
+
     fn parse_module(&mut self) {
         self.skip_newlines();
 
@@ -253,12 +266,7 @@ impl<'a> Parser<'a> {
         let mut params = Vec::new();
         loop {
             // Allow line continuations / whitespace tokens between parameters.
-            while matches!(
-                self.peek(),
-                Some(t) if t.token == Token::LineContinuation || t.token == Token::Newline
-            ) {
-                self.pos += 1;
-            }
+            self.skip_line_continuations();
 
             match self.peek() {
                 None => return params,
@@ -279,8 +287,11 @@ impl<'a> Parser<'a> {
             }
 
             // After a parameter, expect comma or closing paren. Skip anything
-            // else defensively until we find one.
+            // else defensively until we find one. Tolerate line continuations
+            // that sit between a parameter and its trailing comma or between
+            // the last parameter and the closing paren.
             loop {
+                self.skip_line_continuations();
                 match self.peek() {
                     None => return params,
                     Some(t) if t.token == Token::Comma => {
@@ -362,7 +373,9 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // Optional `As <Type>` clause.
+        // Optional `As <Type>` clause. Supports dotted UDT names such as
+        // `ADODB.Connection` or `Microsoft.Office.Core.CommandBar` by greedily
+        // consuming `Ident (Dot Ident)*` and joining with '.'.
         let mut type_name = None;
         if matches!(self.peek(), Some(t) if t.token == Token::As) {
             self.pos += 1;
@@ -370,9 +383,29 @@ impl<'a> Parser<'a> {
                 // Accept any type-ish token (builtin type keyword or identifier).
                 // For the AST we only record identifier-like names; a builtin
                 // type token's `text` still holds the source text.
-                type_name = Some(t.text.clone());
+                let mut buf = String::from(t.text.as_str());
                 end_offset = t.span.end;
                 self.pos += 1;
+
+                // Greedily extend with `.Ident` segments so that dotted UDT
+                // type names (e.g. `ADODB.Connection`) land in a single
+                // `type_name`. Stop as soon as the next token isn't a Dot
+                // followed by an Identifier.
+                while matches!(self.peek(), Some(t) if t.token == Token::Dot)
+                    && matches!(
+                        self.tokens.get(self.pos + 1),
+                        Some(t) if t.token == Token::Identifier
+                    )
+                {
+                    self.pos += 1; // consume Dot
+                    let ident = &self.tokens[self.pos];
+                    buf.push('.');
+                    buf.push_str(ident.text.as_str());
+                    end_offset = ident.span.end;
+                    self.pos += 1;
+                }
+
+                type_name = Some(SmolStr::from(buf));
             }
         }
 
