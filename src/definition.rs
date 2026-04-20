@@ -8,11 +8,39 @@ pub fn goto_definition(
     uri: &Url,
     position: Position,
 ) -> Option<GotoDefinitionResponse> {
-    // Try current file first
+    // Try current file first, preferring symbols scoped to the cursor's procedure.
     let result = host.with_source(uri, |symbols, source| {
         let word = resolve::find_word_at_position(source, position)?;
         let matches = resolve::find_symbol_by_name(symbols, &word);
-        let sym = matches.first()?;
+
+        // Among all matches, prefer a symbol whose proc_scope matches the
+        // procedure that contains the cursor. This makes goto-def scope-aware
+        // for local variables and parameters when two procs share a name.
+        let sym = {
+            let cursor_offset = resolve::position_to_offset(source, position);
+            let containing_proc = cursor_offset.and_then(|off| {
+                symbols
+                    .proc_ranges
+                    .iter()
+                    .find(|(_, r)| off >= r.start as usize && off <= r.end as usize)
+                    .map(|(name, _)| name.clone())
+            });
+
+            if let Some(ref proc_name) = containing_proc {
+                matches
+                    .iter()
+                    .find(|s| {
+                        s.proc_scope
+                            .as_ref()
+                            .map(|p| p.eq_ignore_ascii_case(proc_name))
+                            .unwrap_or(false)
+                    })
+                    .copied()
+                    .or_else(|| matches.first().copied())
+            } else {
+                matches.first().copied()
+            }
+        }?;
 
         let range = resolve::text_range_to_lsp_range(source, sym.span);
         Some(GotoDefinitionResponse::Scalar(Location::new(
