@@ -303,3 +303,47 @@ fn cross_module_truly_undeclared_still_detected() {
         "expected undeclared warning for Bar (not defined anywhere), got: {diags:?}"
     );
 }
+
+#[test]
+fn windows_drive_letter_uri_cross_module_public_symbol_smoke() {
+    // Windows-style URIs (file:///C:/...) must work for cross-module symbol resolution.
+    // path_segments() yields ["C:", "workspace", "ModuleA.bas"] — next_back() gives the filename.
+    let uri_a: Url = "file:///C:/workspace/ModuleA.bas".parse().unwrap();
+    let src_a = "Public Sub Foo()\nEnd Sub\n";
+
+    let uri_b: Url = "file:///C:/workspace/ModuleB.bas".parse().unwrap();
+    let src_b = "Option Explicit\n\nSub Main()\n    Foo\nEnd Sub\n";
+
+    let host = AnalysisHost::new();
+    host.update(uri_a.clone(), src_a.to_string(), parser::parse(src_a));
+    host.update(uri_b.clone(), src_b.to_string(), parser::parse(src_b));
+
+    let diags = host.diagnostics(&uri_b);
+    assert!(
+        !diags.iter().any(|d| d.message.contains("Foo")),
+        "expected no undeclared warning for Foo with Windows-style URIs, got: {diags:?}"
+    );
+}
+
+#[test]
+fn windows_drive_letter_uri_qualified_module_name_smoke() {
+    // Verify that ModuleA extracted from file:///C:/workspace/ModuleA.bas is recognised
+    // as a known module name, suppressing undeclared warnings for ModuleA.Foo calls.
+    let uri_a: Url = "file:///C:/workspace/ModuleA.bas".parse().unwrap();
+    let src_a = "Public Sub Foo()\nEnd Sub\n";
+
+    let uri_b: Url = "file:///C:/workspace/ModuleB.bas".parse().unwrap();
+    let src_b = "Option Explicit\n\nSub Main()\n    ModuleA.Foo\nEnd Sub\n";
+
+    let host = AnalysisHost::new();
+    host.update(uri_a.clone(), src_a.to_string(), parser::parse(src_a));
+    host.update(uri_b.clone(), src_b.to_string(), parser::parse(src_b));
+
+    let diags = host.diagnostics(&uri_b);
+    assert!(
+        !diags
+            .iter()
+            .any(|d| d.message.to_lowercase().contains("modulea")),
+        "expected no undeclared warning for ModuleA with Windows-style URIs, got: {diags:?}"
+    );
+}
