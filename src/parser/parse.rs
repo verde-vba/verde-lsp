@@ -44,7 +44,8 @@ impl<'a> Parser<'a> {
     }
 
     fn skip_newlines(&mut self) {
-        while matches!(self.peek(), Some(t) if t.token == Token::Newline || t.token == Token::Comment) {
+        while matches!(self.peek(), Some(t) if t.token == Token::Newline || t.token == Token::Comment)
+        {
             self.pos += 1;
         }
     }
@@ -58,6 +59,17 @@ impl<'a> Parser<'a> {
             self.peek(),
             Some(t) if t.token == Token::LineContinuation || t.token == Token::Newline
         ) {
+            self.pos += 1;
+        }
+    }
+
+    /// Skip only `_` line-continuation tokens, leaving any plain `Newline`
+    /// in place. Use at sites outside a parenthesized list where a standalone
+    /// Newline actually terminates the construct we're parsing (e.g. the
+    /// signature line of a procedure), but a `_` continuation should still
+    /// transparently join the next physical line.
+    fn skip_line_continuations_preserving_newline(&mut self) {
+        while matches!(self.peek(), Some(t) if t.token == Token::LineContinuation) {
             self.pos += 1;
         }
     }
@@ -176,13 +188,33 @@ impl<'a> Parser<'a> {
             Vec::new()
         };
 
+        // Optional `As <ReturnType>` clause for Function and Property Get.
+        // `Sub`, `Property Let`, and `Property Set` do not carry a return
+        // type; a missing `As` in a legacy Function is tolerated (stays None).
+        // A `_` line continuation may sit between `)` and `As`, so we peek
+        // across continuations — but must not consume the signature-terminating
+        // Newline that the body_start scan below relies on.
+        let return_type = match kind {
+            ProcedureKind::Function | ProcedureKind::PropertyGet => {
+                self.skip_line_continuations_preserving_newline();
+                if matches!(self.peek(), Some(t) if t.token == Token::As) {
+                    self.pos += 1; // consume `As`
+                    self.skip_line_continuations_preserving_newline();
+                    self.parse_dotted_type_name().map(|(name, _end)| name)
+                } else {
+                    None
+                }
+            }
+            ProcedureKind::Sub | ProcedureKind::PropertyLet | ProcedureKind::PropertySet => None,
+        };
+
         // Skip to end of procedure
         let end_token = match kind {
             ProcedureKind::Sub => Token::EndSub,
             ProcedureKind::Function => Token::EndFunction,
-            ProcedureKind::PropertyGet | ProcedureKind::PropertyLet | ProcedureKind::PropertySet => {
-                Token::EndProperty
-            }
+            ProcedureKind::PropertyGet
+            | ProcedureKind::PropertyLet
+            | ProcedureKind::PropertySet => Token::EndProperty,
         };
 
         // Determine the byte offset where the body starts — just past the
@@ -226,7 +258,7 @@ impl<'a> Parser<'a> {
                         kind,
                         visibility,
                         params,
-                        return_type: None,
+                        return_type,
                         body,
                         span: TextRange::new(start, end),
                         body_range: TextRange::new(body_start, body_end),
@@ -462,11 +494,7 @@ impl<'a> Parser<'a> {
     /// commas, stopping at a statement terminator (Newline/Colon) or EOF.
     /// Leaves `pos` on the terminator (or EOF); the caller skips it.
     fn parse_local_declaration(&mut self, kind: DeclKind) -> LocalDeclarationNode {
-        let start_offset = self
-            .tokens
-            .get(self.pos)
-            .map(|t| t.span.start)
-            .unwrap_or(0);
+        let start_offset = self.tokens.get(self.pos).map(|t| t.span.start).unwrap_or(0);
         self.pos += 1; // consume the kind keyword (Dim/Static/Const/ReDim)
 
         // `ReDim` optionally has `Preserve` right after the keyword.
@@ -532,11 +560,7 @@ impl<'a> Parser<'a> {
     /// consumers retain positional fidelity. Leaves `pos` on the terminator
     /// (or EOF); the caller skips it.
     fn parse_expression_statement(&mut self) -> ExpressionStatementNode {
-        let start_offset = self
-            .tokens
-            .get(self.pos)
-            .map(|t| t.span.start)
-            .unwrap_or(0);
+        let start_offset = self.tokens.get(self.pos).map(|t| t.span.start).unwrap_or(0);
         let mut end_offset = start_offset;
         let mut tokens: Vec<lexer::SpannedToken> = Vec::new();
         let mut paren_depth: i32 = 0;
@@ -877,9 +901,8 @@ mod tests {
 
     #[test]
     fn parse_procedure_captures_multiple_statements_in_order() {
-        let result = parse(
-            "Sub Foo()\n    Dim x As Long\n    x = 1\n    Call DoStuff(x)\nEnd Sub\n",
-        );
+        let result =
+            parse("Sub Foo()\n    Dim x As Long\n    x = 1\n    Call DoStuff(x)\nEnd Sub\n");
         let proc = first_procedure(&result.ast);
         assert_eq!(
             proc.body.len(),
@@ -989,6 +1012,93 @@ mod tests {
         assert_eq!(
             y.type_name.as_ref().map(|s| s.as_str()),
             Some("Scripting.Dictionary")
+        );
+    }
+
+    #[test]
+    fn parse_function_captures_simple_return_type() {
+        let result = parse("Function Foo() As String\nEnd Function\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.kind, ProcedureKind::Function);
+        assert_eq!(
+            proc.return_type.as_ref().map(|s| s.as_str()),
+            Some("String")
+        );
+    }
+
+    #[test]
+    fn parse_function_captures_dotted_return_type() {
+        let result = parse("Function Bar() As ADODB.Connection\nEnd Function\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(
+            proc.return_type.as_ref().map(|s| s.as_str()),
+            Some("ADODB.Connection")
+        );
+    }
+
+    #[test]
+    fn parse_function_captures_deeply_dotted_return_type() {
+        let result = parse("Function Baz() As Microsoft.Office.Core.CommandBar\nEnd Function\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(
+            proc.return_type.as_ref().map(|s| s.as_str()),
+            Some("Microsoft.Office.Core.CommandBar")
+        );
+    }
+
+    #[test]
+    fn parse_property_get_captures_return_type() {
+        let result = parse("Property Get Value() As Long\nEnd Property\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.kind, ProcedureKind::PropertyGet);
+        assert_eq!(proc.return_type.as_ref().map(|s| s.as_str()), Some("Long"));
+    }
+
+    #[test]
+    fn parse_property_let_has_no_return_type() {
+        let result = parse("Property Let Value(ByVal v As Long)\nEnd Property\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.kind, ProcedureKind::PropertyLet);
+        assert!(
+            proc.return_type.is_none(),
+            "Property Let should not have a return type, got {:?}",
+            proc.return_type
+        );
+    }
+
+    #[test]
+    fn parse_sub_has_no_return_type() {
+        let result = parse("Sub Foo()\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.kind, ProcedureKind::Sub);
+        assert!(
+            proc.return_type.is_none(),
+            "Sub should not have a return type, got {:?}",
+            proc.return_type
+        );
+    }
+
+    #[test]
+    fn parse_function_without_return_type() {
+        let result = parse("Function Foo()\nEnd Function\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.kind, ProcedureKind::Function);
+        assert!(
+            proc.return_type.is_none(),
+            "legacy Function without As should have no return_type, got {:?}",
+            proc.return_type
+        );
+    }
+
+    #[test]
+    fn parse_function_multiline_return_type() {
+        let source = "Function Foo() _\n    As String\nEnd Function\n";
+        let result = parse(source);
+        let proc = first_procedure(&result.ast);
+        assert_eq!(
+            proc.return_type.as_ref().map(|s| s.as_str()),
+            Some("String"),
+            "expected return type captured across line continuation"
         );
     }
 
