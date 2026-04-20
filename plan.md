@@ -1,8 +1,8 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+23 完了)
+> 最終更新: 2026-04-21 (Sprint N+24 完了)
 > 現在ブランチ: main
-> テスト基準: 92 green (lib 36 + integration 56), cargo clippy -D warnings 0 件
+> テスト基準: 94 green (lib 36 + integration 58), cargo clippy -D warnings 0 件
 
 ---
 
@@ -101,11 +101,52 @@ Option (A) — `rename.rs` の closure に `proc_constraint: Option<TextRange>` 
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+24)
+## Sprint N+24 (2026-04-21)
+
+### Sprint Goal
+PBI-22: rename のパラメータスコープ対応 — procedure params も proc_constraint で絞り込み、別 procedure の同名 parameter を rename しない
+
+### Path Chosen
+既存の proc_constraint 機構を確認テストで仕様として固定。`ParameterNode.span` が full parameter span を持ち `find_symbol_at_position` が宣言サイトで param を発見できること、および `proc_scope: Some(proc.name)` が use site Step 2 ロジックを通じて正しく機能することを 2 テストで証明。
+
+### Scope
+- `tests/rename.rs` に 2 テスト追加
+  - `rename_parameter_stays_within_its_procedure`
+  - `rename_parameter_from_use_site_stays_within_its_procedure`
+- `src/rename.rs` の変更ゼロ (実装は PBI-21 時点で既に正しかった)
+
+### Acceptance Criteria
+1. 別 Sub に同名パラメータがある場合、cursor Sub 内のみ rename される (declaration site)
+2. use site (x = 1) からの rename も同一制約で動作する
+3. cargo test 92 → 94 green, clippy -D warnings 0 件
+
+---
+
+## Sprint N+24 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-22 パラメータスコープ対応 rename」を完全達成。ただし実装変更はゼロ — 既存の proc_constraint 機構が既にカバーしていた。
+
+### KPT
+
+#### Keep
+- テストを書いて即 GREEN になった場合でも「確認テスト」として価値がある。パラメータが proc_constraint を正しく通過するという保証がコードベースに残った。
+- `ParameterNode.span` が full parameter span (modifier〜型名まで) を持つ設計が、`find_symbol_at_position` の汎用性を担保している。
+
+#### Problem
+- RED フェーズで想定どおりのテスト失敗が起きなかった。PBI-21 の実装範囲の見積が「ローカル変数のみ」と言いながら実際はパラメータも包含していた (見積誤差ではなく設計の良さ)。
+
+#### Try
+- 次 PBI で「既に動く可能性が高い XS タスク」は事前に probe を走らせて実装状況を確認してから Sprint に組み込む。
+
+---
+
+## 次 Sprint 推奨 (Sprint N+25)
 
 **Sprint Goal 候補**:
 1. symbol kind 対応 (completion/hover での種別表示改善) — S
-2. rename のパラメータスコープ対応 (procedure params も proc_constraint で絞り込み) — XS
+2. goto-def for parameters (パラメータの定義ジャンプ) — XS
 
 ---
 
@@ -164,6 +205,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-19 | textDocument/documentSymbol プロバイダ | S | **Done** |
 | PBI-20 | Private シンボルの cross-file rename 抑止 | XS | **Done** |
 | PBI-21 | intra-file scope-aware rename (proc_scope 尊重) | XS | **Done** |
+| PBI-22 | rename パラメータスコープ対応 (proc_constraint 確認) | XS | **Done** |
 
 ---
 
