@@ -469,8 +469,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a local declaration starting at the Dim/Static/Const/ReDim keyword.
-    /// Collects declared identifier names, honoring `As Type` clauses and
-    /// commas, stopping at a statement terminator (Newline/Colon) or EOF.
+    /// Collects declared identifier names and their optional `As <Type>` clauses,
+    /// stopping at a statement terminator (Newline/Colon) or EOF.
     /// Leaves `pos` on the terminator (or EOF); the caller skips it.
     fn parse_local_declaration(&mut self, kind: DeclKind) -> LocalDeclarationNode {
         let start_offset = self.tokens.get(self.pos).map(|t| t.span.start).unwrap_or(0);
@@ -481,7 +481,7 @@ impl<'a> Parser<'a> {
             self.pos += 1;
         }
 
-        let mut names: Vec<SmolStr> = Vec::new();
+        let mut names: Vec<(SmolStr, Option<SmolStr>)> = Vec::new();
         let mut end_offset = start_offset;
         let mut paren_depth: i32 = 0;
         let mut expect_name = true;
@@ -494,10 +494,19 @@ impl<'a> Parser<'a> {
                     self.pos += 1;
                 }
                 Token::Identifier if expect_name && paren_depth == 0 => {
-                    names.push(t.text.clone());
+                    names.push((t.text.clone(), None));
                     end_offset = t.span.end;
                     expect_name = false;
                     self.pos += 1;
+                }
+                Token::As if !expect_name && paren_depth == 0 => {
+                    self.pos += 1; // consume `As`
+                    if let Some((type_name, end)) = self.parse_dotted_type_name() {
+                        end_offset = end;
+                        if let Some(last) = names.last_mut() {
+                            last.1 = Some(type_name);
+                        }
+                    }
                 }
                 Token::Comma if paren_depth == 0 => {
                     end_offset = t.span.end;
@@ -515,10 +524,7 @@ impl<'a> Parser<'a> {
                     self.pos += 1;
                 }
                 _ => {
-                    // `As Type`, `= expr`, array bounds, etc. Anything that
-                    // isn't another top-level name belongs to the current
-                    // slot — keep scanning until we see a comma, newline, or
-                    // colon.
+                    // `= expr`, array bounds, etc.
                     end_offset = t.span.end;
                     expect_name = false;
                     self.pos += 1;
@@ -880,8 +886,9 @@ mod tests {
         match statement(&result.ast, proc.body[0]) {
             StatementNode::LocalDeclaration(d) => {
                 assert_eq!(d.kind, DeclKind::Dim);
-                let names: Vec<&str> = d.names.iter().map(|n| n.as_str()).collect();
+                let names: Vec<&str> = d.names.iter().map(|(n, _)| n.as_str()).collect();
                 assert_eq!(names, vec!["x"]);
+                assert_eq!(d.names[0].1.as_deref(), Some("Long"));
             }
             other => panic!("expected LocalDeclaration, got {:?}", other),
         }
@@ -895,8 +902,11 @@ mod tests {
         match statement(&result.ast, proc.body[0]) {
             StatementNode::LocalDeclaration(d) => {
                 assert_eq!(d.kind, DeclKind::Dim);
-                let names: Vec<&str> = d.names.iter().map(|n| n.as_str()).collect();
+                let names: Vec<&str> = d.names.iter().map(|(n, _)| n.as_str()).collect();
                 assert_eq!(names, vec!["a", "b", "c"]);
+                assert_eq!(d.names[0].1.as_deref(), Some("Long"));
+                assert_eq!(d.names[1].1.as_deref(), Some("String"));
+                assert_eq!(d.names[2].1, None);
             }
             other => panic!("expected LocalDeclaration, got {:?}", other),
         }
@@ -915,7 +925,7 @@ mod tests {
         );
         match statement(&result.ast, proc.body[0]) {
             StatementNode::LocalDeclaration(d) => {
-                let names: Vec<&str> = d.names.iter().map(|n| n.as_str()).collect();
+                let names: Vec<&str> = d.names.iter().map(|(n, _)| n.as_str()).collect();
                 assert_eq!(names, vec!["x"]);
             }
             other => panic!("expected LocalDeclaration first, got {:?}", other),
@@ -938,8 +948,9 @@ mod tests {
         match statement(&result.ast, proc.body[0]) {
             StatementNode::LocalDeclaration(d) => {
                 assert_eq!(d.kind, DeclKind::Const);
-                let names: Vec<&str> = d.names.iter().map(|n| n.as_str()).collect();
+                let names: Vec<&str> = d.names.iter().map(|(n, _)| n.as_str()).collect();
                 assert_eq!(names, vec!["PI"]);
+                assert_eq!(d.names[0].1.as_deref(), Some("Double"));
             }
             other => panic!("expected LocalDeclaration, got {:?}", other),
         }
