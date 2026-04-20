@@ -7,7 +7,12 @@ use crate::parser::lexer::Token;
 use crate::parser::ParseResult;
 use crate::vba_builtins::{BUILTIN_FUNCTIONS, BUILTIN_TYPES, KEYWORDS};
 
-pub fn compute(parse_result: &ParseResult, symbols: &SymbolTable, source: &str) -> Vec<Diagnostic> {
+pub fn compute(
+    parse_result: &ParseResult,
+    symbols: &SymbolTable,
+    source: &str,
+    cross_module_names: &std::collections::HashSet<String>,
+) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
     for error in &parse_result.errors {
@@ -24,7 +29,12 @@ pub fn compute(parse_result: &ParseResult, symbols: &SymbolTable, source: &str) 
     }
 
     if parse_result.ast.option_explicit {
-        diagnostics.extend(check_option_explicit(&parse_result.ast, source, symbols));
+        diagnostics.extend(check_option_explicit(
+            &parse_result.ast,
+            source,
+            symbols,
+            cross_module_names,
+        ));
     }
 
     diagnostics
@@ -51,8 +61,14 @@ pub fn compute(parse_result: &ParseResult, symbols: &SymbolTable, source: &str) 
 ///   rhs are not yet distinguished — covered only by the coarse handling in
 ///   the expression-statement walker.
 /// - Nested procedures are not a concern (VBA disallows them).
-pub fn check_option_explicit(ast: &Ast, source: &str, symbols: &SymbolTable) -> Vec<Diagnostic> {
-    let declared = collect_module_declared(symbols);
+pub fn check_option_explicit(
+    ast: &Ast,
+    source: &str,
+    symbols: &SymbolTable,
+    cross_module_names: &std::collections::HashSet<String>,
+) -> Vec<Diagnostic> {
+    let mut declared = collect_module_declared(symbols);
+    declared.extend(cross_module_names.iter().cloned());
     let mut diagnostics = Vec::new();
 
     for (_, node) in ast.nodes.iter() {

@@ -49,7 +49,17 @@ impl AnalysisHost {
 
     pub fn diagnostics(&self, uri: &Url) -> Vec<Diagnostic> {
         if let Some(file) = self.files.get(uri) {
-            diagnostics::compute(&file.parse_result, &file.symbols, &file.source)
+            let cross_module_names: std::collections::HashSet<String> = self
+                .all_public_symbols_from_other_files(uri)
+                .into_iter()
+                .map(|s| s.name.to_ascii_lowercase())
+                .collect();
+            diagnostics::compute(
+                &file.parse_result,
+                &file.symbols,
+                &file.source,
+                &cross_module_names,
+            )
         } else {
             Vec::new()
         }
