@@ -196,7 +196,19 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                     },
                     proc_scope: None,
                 });
+                let mut next_value: i64 = 0;
                 for (member_name, value) in &ed.members {
+                    let resolved = match value {
+                        Some(v) => {
+                            next_value = v + 1;
+                            Some(*v)
+                        }
+                        None => {
+                            let implicit = next_value;
+                            next_value += 1;
+                            Some(implicit)
+                        }
+                    };
                     symbols.push(Symbol {
                         name: member_name.clone(),
                         kind: SymbolKind::EnumMember,
@@ -205,7 +217,7 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                         span: ed.span,
                         detail: SymbolDetail::EnumMember {
                             parent_enum: ed.name.clone(),
-                            value: *value,
+                            value: resolved,
                         },
                         proc_scope: None,
                     });
