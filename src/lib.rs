@@ -4,6 +4,7 @@ pub mod definition;
 pub mod document_highlight;
 pub mod document_symbol;
 pub mod excel_model;
+pub mod folding_range;
 pub mod hover;
 pub mod parser;
 pub mod references;

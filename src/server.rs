@@ -52,6 +52,7 @@ fn server_capabilities() -> ServerCapabilities {
         definition_provider: Some(OneOf::Left(true)),
         rename_provider: Some(OneOf::Left(true)),
         references_provider: Some(OneOf::Left(true)),
+        folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
         workspace_symbol_provider: Some(OneOf::Left(true)),
         document_highlight_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
@@ -185,6 +186,16 @@ impl LanguageServer for VbaLanguageServer {
         let position = params.text_document_position.position;
         let locs = crate::references::find_references(&self.analysis, uri, position);
         Ok(if locs.is_empty() { None } else { Some(locs) })
+    }
+
+    async fn folding_range(&self, params: FoldingRangeParams) -> Result<Option<Vec<FoldingRange>>> {
+        let uri = &params.text_document.uri;
+        let ranges = crate::folding_range::folding_ranges(&self.analysis, uri);
+        Ok(if ranges.is_empty() {
+            None
+        } else {
+            Some(ranges)
+        })
     }
 
     async fn symbol(

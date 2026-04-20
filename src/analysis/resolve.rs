@@ -100,7 +100,7 @@ pub fn position_to_offset(source: &str, position: Position) -> Option<usize> {
     }
 }
 
-fn offset_to_position(source: &str, offset: usize) -> Position {
+pub fn offset_to_position(source: &str, offset: usize) -> Position {
     let mut line = 0u32;
     let mut col = 0u32;
 
