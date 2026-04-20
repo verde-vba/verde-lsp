@@ -43,14 +43,6 @@ impl<'a> Parser<'a> {
         self.tokens.get(self.pos)
     }
 
-    fn advance(&mut self) -> Option<&lexer::SpannedToken> {
-        let tok = self.tokens.get(self.pos);
-        if tok.is_some() {
-            self.pos += 1;
-        }
-        tok
-    }
-
     fn skip_newlines(&mut self) {
         while matches!(self.peek(), Some(t) if t.token == Token::Newline || t.token == Token::Comment) {
             self.pos += 1;
