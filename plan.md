@@ -8,7 +8,18 @@
 
 ## 次 Sprint 推奨 (Sprint N+17)
 
-**Sprint Goal 候補**: 新規 PBI が Refinement 後に Ready になり次第実行
+**Sprint Goal**: PBI-15 を完遂し、textDocument/references を提供する
+
+### PBI-15 — textDocument/references プロバイダ実装 (XS) ✅ Ready
+
+| 項目 | 内容 |
+|------|------|
+| **目的** | カーソル下のシンボルの全参照箇所を返す `textDocument/references` を実装する。 |
+| **背景** | `find_word_at_position` + `find_all_word_occurrences` は既存。rename がこれらを使う設計をそのまま転用できる。 |
+| **実装方針** | `src/references.rs` に `pub fn find_references(host, uri, position) -> Vec<Location>` を追加。server.rs で `references_provider: Some(true)` と `references` ハンドラを追加。MVP は単一ファイル内の全 occurrence を返す。 |
+| **受入基準** | (1) 2 回使われるシンボルに対して 2 件の Location が返る。(2) 77+ green, clippy 0。 |
+| **見積サイズ** | XS |
+| **依存** | なし |
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -326,6 +337,7 @@
 | PBI-11 | workbook-context.json シート名補完 | M | **Done** |
 | PBI-13 | workbook-context.json tables/named_ranges 補完拡張 | XS | **Done** |
 | PBI-14 | workbook-context.json 自動再読み込み (didChangeWatchedFiles) | S | **Done** |
+| PBI-15 | textDocument/references プロバイダ実装 | XS | **Ready** |
 | PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
