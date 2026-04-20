@@ -147,6 +147,33 @@ fn goto_def_parameter_from_use_site_jumps_to_owning_proc_param() {
 
 // Symmetric test: cursor in Sub B's body — must jump to Sub B's parameter (line 3).
 #[test]
+/// Goto-def on `x` in `f.x` must jump to the member declaration line in the Type block.
+#[test]
+fn goto_def_on_udt_member_access_jumps_to_type_member() {
+    // line 0: Type MyType
+    // line 1:     x As Long      <- 'x' at col 4 — jump target
+    // line 2: End Type
+    // line 3: Sub Test()
+    // line 4:     Dim f As MyType
+    // line 5:     f.x            <- 'x' at col 6 — cursor
+    // line 6: End Sub
+    let source =
+        "Type MyType\n    x As Long\nEnd Type\nSub Test()\n    Dim f As MyType\n    f.x\nEnd Sub\n";
+    let cursor = Position::new(5, 6); // on 'x' in 'f.x'
+    let def =
+        do_goto(source, cursor).expect("expected goto-def result for UDT member dot-access");
+    assert_eq!(
+        def.line, 1,
+        "expected definition on line 1 (member 'x' in Type block), got {}",
+        def.line
+    );
+    assert_eq!(
+        def.character, 4,
+        "expected col 4 ('x' in Type block), got {}",
+        def.character
+    );
+}
+
 fn goto_def_parameter_in_second_proc_jumps_to_its_own_param() {
     let source =
         "Sub A(x As Integer)\n    x = 1\nEnd Sub\nSub B(x As Integer)\n    x = 1\nEnd Sub\n";
