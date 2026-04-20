@@ -194,7 +194,7 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
                         detail: SymbolDetail::None,
                         proc_scope: None,
                     });
-                    let _ = value;
+                    let _value = value;
                 }
             }
             _ => {}
