@@ -77,6 +77,16 @@ pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<Compl
         });
     }
 
+    // Workbook sheet names from workbook-context.json
+    for sheet in host.workbook_sheets() {
+        items.push(CompletionItem {
+            label: sheet,
+            kind: Some(CompletionItemKind::MODULE),
+            detail: Some("Worksheet".to_string()),
+            ..Default::default()
+        });
+    }
+
     items
 }
 

@@ -3,7 +3,7 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
-use crate::analysis::AnalysisHost;
+use crate::analysis::{AnalysisHost, WorkbookContext};
 use crate::parser;
 
 pub struct VbaLanguageServer {
@@ -64,6 +64,18 @@ impl LanguageServer for VbaLanguageServer {
     }
 
     async fn initialized(&self, _: InitializedParams) {
+        // Clone before .await to avoid holding RwLockReadGuard across await point.
+        let root = self.root_uri.read().unwrap().clone();
+        if let Some(root) = root {
+            if let Ok(path) = root.to_file_path() {
+                let json_path = path.join("workbook-context.json");
+                if let Ok(content) = tokio::fs::read_to_string(&json_path).await {
+                    if let Ok(ctx) = serde_json::from_str::<WorkbookContext>(&content) {
+                        self.analysis.set_workbook_context(ctx);
+                    }
+                }
+            }
+        }
         self.client
             .log_message(MessageType::INFO, "verde-lsp initialized")
             .await;
