@@ -8,7 +8,18 @@
 
 ## 次 Sprint 推奨 (Sprint N+16)
 
-**Sprint Goal 候補**: PBI-14 — workbook-context.json 自動再読み込み (workspace/didChangeWatchedFiles 対応) または新規 diagnostics 改善
+**Sprint Goal**: PBI-14 を完遂し、workbook-context.json の変更を LSP 再起動なしに反映する
+
+### PBI-14 — workbook-context.json 自動再読み込み (didChangeWatchedFiles 対応) (S) ✅ Ready
+
+| 項目 | 内容 |
+|------|------|
+| **目的** | `workbook-context.json` が更新されたとき LSP を再起動せずに補完候補を更新する。 |
+| **背景** | PBI-11/13 で初回ロードは実装。`workspace/didChangeWatchedFiles` を使い file watch 登録 + 再ロードを追加する。 |
+| **実装方針** | (1) `AnalysisHost::reload_workbook_context_from_path(path)` ヘルパーを抽出（テスト可能単位）。(2) `VbaLanguageServer::initialized` でこのヘルパーを使うよう既存ロジックをリファクタ。(3) `initialized` で file watcher を `DidChangeWatchedFilesRegistrationOptions` で登録。(4) `did_change_watched_files` ハンドラを実装。 |
+| **受入基準** | `reload_workbook_context_from_path` が正しくロードすること (unit test)。74+ green, clippy 0。 |
+| **見積サイズ** | S |
+| **依存** | PBI-11 (完了済み) |
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -295,6 +306,7 @@
 | PBI-10 | For Each ループ変数 undeclared 誤検出除外 | S | **Won't Do** (already working) |
 | PBI-11 | workbook-context.json シート名補完 | M | **Done** |
 | PBI-13 | workbook-context.json tables/named_ranges 補完拡張 | XS | **Done** |
+| PBI-14 | workbook-context.json 自動再読み込み (didChangeWatchedFiles) | S | **Ready** |
 | PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
