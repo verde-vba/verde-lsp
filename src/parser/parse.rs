@@ -613,6 +613,111 @@ mod tests {
         );
     }
 
+    fn statement<'a>(ast: &'a Ast, id: NodeId) -> &'a StatementNode {
+        match &ast.nodes[id] {
+            AstNode::Statement(s) => s,
+            other => panic!("expected Statement node, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_procedure_populates_body_with_expression_statement() {
+        let result = parse("Sub Foo()\n    x = 1\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(
+            proc.body.len(),
+            1,
+            "expected 1 body statement, got {}",
+            proc.body.len()
+        );
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::Expression(expr) => {
+                assert!(!expr.tokens.is_empty(), "expected non-empty tokens");
+                assert!(
+                    expr.tokens
+                        .iter()
+                        .any(|t| t.token == Token::Identifier && t.text.as_str() == "x"),
+                    "expected 'x' identifier token in expression tokens"
+                );
+            }
+            other => panic!("expected Expression statement, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_procedure_captures_local_dim_declaration() {
+        let result = parse("Sub Foo()\n    Dim x As Long\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.body.len(), 1, "expected 1 body statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::LocalDeclaration(d) => {
+                assert_eq!(d.kind, DeclKind::Dim);
+                let names: Vec<&str> = d.names.iter().map(|n| n.as_str()).collect();
+                assert_eq!(names, vec!["x"]);
+            }
+            other => panic!("expected LocalDeclaration, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_procedure_captures_multiple_dim_names() {
+        let result = parse("Sub Foo()\n    Dim a As Long, b As String, c\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.body.len(), 1, "expected 1 body statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::LocalDeclaration(d) => {
+                assert_eq!(d.kind, DeclKind::Dim);
+                let names: Vec<&str> = d.names.iter().map(|n| n.as_str()).collect();
+                assert_eq!(names, vec!["a", "b", "c"]);
+            }
+            other => panic!("expected LocalDeclaration, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_procedure_captures_multiple_statements_in_order() {
+        let result = parse(
+            "Sub Foo()\n    Dim x As Long\n    x = 1\n    Call DoStuff(x)\nEnd Sub\n",
+        );
+        let proc = first_procedure(&result.ast);
+        assert_eq!(
+            proc.body.len(),
+            3,
+            "expected 3 body statements, got {}",
+            proc.body.len()
+        );
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::LocalDeclaration(d) => {
+                let names: Vec<&str> = d.names.iter().map(|n| n.as_str()).collect();
+                assert_eq!(names, vec!["x"]);
+            }
+            other => panic!("expected LocalDeclaration first, got {:?}", other),
+        }
+        assert!(matches!(
+            statement(&result.ast, proc.body[1]),
+            StatementNode::Expression(_)
+        ));
+        assert!(matches!(
+            statement(&result.ast, proc.body[2]),
+            StatementNode::Expression(_)
+        ));
+    }
+
+    #[test]
+    fn parse_procedure_captures_const_declaration() {
+        let result = parse("Sub Foo()\n    Const PI As Double = 3.14\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.body.len(), 1, "expected 1 body statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::LocalDeclaration(d) => {
+                assert_eq!(d.kind, DeclKind::Const);
+                let names: Vec<&str> = d.names.iter().map(|n| n.as_str()).collect();
+                assert_eq!(names, vec!["PI"]);
+            }
+            other => panic!("expected LocalDeclaration, got {:?}", other),
+        }
+    }
+
     #[test]
     fn parse_procedure_body_range_excludes_signature() {
         let source = "Sub Foo(x As Long)\n    y = x\nEnd Sub\n";
