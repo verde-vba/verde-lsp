@@ -82,3 +82,40 @@ fn hover_on_sub_name_shows_parameter_list() {
         content
     );
 }
+
+// Two Sub procs both declaring a parameter named "x" but with different types.
+// Hover in Sub A's body must show "Integer", hover in Sub B's body must show "String".
+//
+// Sub A(x As Integer)  <- line 0, 'x' at col 6
+//     x = 1            <- line 1, 'x' at col 4  <- cursor (Test 1)
+// End Sub              <- line 2
+// Sub B(x As String)   <- line 3, 'x' at col 6
+//     x = "hi"         <- line 4, 'x' at col 4  <- cursor (Test 2)
+// End Sub              <- line 5
+#[test]
+fn hover_parameter_in_first_proc_shows_its_type() {
+    let source =
+        "Sub A(x As Integer)\n    x = 1\nEnd Sub\nSub B(x As String)\n    x = \"hi\"\nEnd Sub\n";
+    let position = Position::new(1, 4); // 'x' in Sub A's body
+
+    let content = do_hover(source, position).expect("expected hover result for 'x' in Sub A");
+    assert!(
+        content.contains("Integer"),
+        "expected hover to show 'Integer' (Sub A's x), got: {:?}",
+        content
+    );
+}
+
+#[test]
+fn hover_parameter_in_second_proc_shows_its_type() {
+    let source =
+        "Sub A(x As Integer)\n    x = 1\nEnd Sub\nSub B(x As String)\n    x = \"hi\"\nEnd Sub\n";
+    let position = Position::new(4, 4); // 'x' in Sub B's body
+
+    let content = do_hover(source, position).expect("expected hover result for 'x' in Sub B");
+    assert!(
+        content.contains("String"),
+        "expected hover to show 'String' (Sub B's x), got: {:?}",
+        content
+    );
+}
