@@ -606,6 +606,10 @@ impl<'a> Parser<'a> {
                 let (tokens, span) = self.collect_statement_tokens();
                 StatementNode::GoTo(GoToStatementNode { tokens, span })
             }
+            Some(Token::On) => {
+                let (tokens, span) = self.collect_statement_tokens();
+                StatementNode::OnError(OnErrorStatementNode { tokens, span })
+            }
             _ => StatementNode::Expression(self.parse_expression_statement()),
         };
         AstNode::Statement(stmt)
@@ -1310,6 +1314,22 @@ mod tests {
                 );
             }
             other => panic!("expected Redim statement, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_captures_on_error_goto_as_on_error_statement() {
+        let result = parse("Sub F()\n    On Error GoTo ErrHandler\nEnd Sub\n");
+        let proc = first_procedure(&result.ast);
+        assert_eq!(proc.body.len(), 1, "expected 1 body statement");
+        match statement(&result.ast, proc.body[0]) {
+            StatementNode::OnError(node) => {
+                assert!(
+                    node.tokens.iter().any(|t| t.token == Token::On),
+                    "expected the On keyword inside captured tokens"
+                );
+            }
+            other => panic!("expected OnError statement, got {:?}", other),
         }
     }
 
