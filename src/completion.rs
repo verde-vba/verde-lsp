@@ -5,6 +5,20 @@ use crate::analysis::symbols::{SymbolKind, SymbolTable};
 use crate::analysis::AnalysisHost;
 use crate::vba_builtins;
 
+fn symbol_kind_to_completion_kind(kind: &SymbolKind) -> CompletionItemKind {
+    match kind {
+        SymbolKind::Procedure => CompletionItemKind::METHOD,
+        SymbolKind::Function => CompletionItemKind::FUNCTION,
+        SymbolKind::Property => CompletionItemKind::PROPERTY,
+        SymbolKind::Variable => CompletionItemKind::VARIABLE,
+        SymbolKind::Constant => CompletionItemKind::CONSTANT,
+        SymbolKind::Parameter => CompletionItemKind::VARIABLE,
+        SymbolKind::TypeDef => CompletionItemKind::STRUCT,
+        SymbolKind::EnumDef => CompletionItemKind::ENUM,
+        SymbolKind::EnumMember => CompletionItemKind::ENUM_MEMBER,
+    }
+}
+
 pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<CompletionItem> {
     let mut items = Vec::new();
 
@@ -39,17 +53,7 @@ pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<Compl
                     .is_some_and(|cs| cs.eq_ignore_ascii_case(scope.as_str())),
             })
             .map(|sym| {
-                let kind = match sym.kind {
-                    SymbolKind::Procedure => CompletionItemKind::METHOD,
-                    SymbolKind::Function => CompletionItemKind::FUNCTION,
-                    SymbolKind::Property => CompletionItemKind::PROPERTY,
-                    SymbolKind::Variable => CompletionItemKind::VARIABLE,
-                    SymbolKind::Constant => CompletionItemKind::CONSTANT,
-                    SymbolKind::Parameter => CompletionItemKind::VARIABLE,
-                    SymbolKind::TypeDef => CompletionItemKind::STRUCT,
-                    SymbolKind::EnumDef => CompletionItemKind::ENUM,
-                    SymbolKind::EnumMember => CompletionItemKind::ENUM_MEMBER,
-                };
+                let kind = symbol_kind_to_completion_kind(&sym.kind);
                 CompletionItem {
                     label: sym.name.to_string(),
                     kind: Some(kind),
@@ -64,17 +68,7 @@ pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<Compl
 
     // Public symbols from other files in the workspace (cross-module completion)
     for sym in host.all_public_symbols_from_other_files(uri) {
-        let kind = match sym.kind {
-            SymbolKind::Procedure => CompletionItemKind::METHOD,
-            SymbolKind::Function => CompletionItemKind::FUNCTION,
-            SymbolKind::Property => CompletionItemKind::PROPERTY,
-            SymbolKind::Variable => CompletionItemKind::VARIABLE,
-            SymbolKind::Constant => CompletionItemKind::CONSTANT,
-            SymbolKind::Parameter => CompletionItemKind::VARIABLE,
-            SymbolKind::TypeDef => CompletionItemKind::STRUCT,
-            SymbolKind::EnumDef => CompletionItemKind::ENUM,
-            SymbolKind::EnumMember => CompletionItemKind::ENUM_MEMBER,
-        };
+        let kind = symbol_kind_to_completion_kind(&sym.kind);
         items.push(CompletionItem {
             label: sym.name.to_string(),
             kind: Some(kind),
