@@ -1,0 +1,40 @@
+use tower_lsp::lsp_types::{DiagnosticSeverity, Url};
+use verde_lsp::analysis::AnalysisHost;
+use verde_lsp::parser;
+
+#[test]
+fn warns_on_undeclared_variable_when_option_explicit_is_set() {
+    let source = "Option Explicit\n\nSub Main()\n    x = 10\nEnd Sub\n";
+    let uri: Url = "file:///test.bas".parse().unwrap();
+
+    let host = AnalysisHost::new();
+    let parse_result = parser::parse(source);
+    host.update(uri.clone(), source.to_string(), parse_result);
+
+    let diagnostics = host.diagnostics(&uri);
+
+    assert_eq!(
+        diagnostics.len(),
+        1,
+        "expected exactly 1 diagnostic, got {}: {:?}",
+        diagnostics.len(),
+        diagnostics
+    );
+    let diag = &diagnostics[0];
+    assert_eq!(
+        diag.severity,
+        Some(DiagnosticSeverity::WARNING),
+        "expected Warning severity, got {:?}",
+        diag.severity
+    );
+    assert!(
+        diag.message.contains("x"),
+        "expected message to contain 'x', got: {:?}",
+        diag.message
+    );
+    assert!(
+        diag.message.contains("Option Explicit"),
+        "expected message to contain 'Option Explicit', got: {:?}",
+        diag.message
+    );
+}
