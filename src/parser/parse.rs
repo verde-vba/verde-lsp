@@ -688,6 +688,11 @@ impl<'a> Parser<'a> {
         if is_const {
             self.pos += 1;
         }
+        // Consume a leading `Dim` if present (module-level bare `Dim m As String`,
+        // or `Public Dim m` after the visibility keyword was already consumed).
+        if matches!(self.peek(), Some(t) if t.token == Token::Dim) {
+            self.pos += 1;
+        }
 
         if let Some(tok) = self.peek() {
             if tok.token == Token::Identifier {
@@ -1367,7 +1372,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "BUG-01: parse_variable does not consume Dim, causing infinite loop"]
     fn parse_module_level_bare_dim_variable() {
         let result = parse("Dim m As String\n");
         let var = result.ast.root.iter().find_map(|&id| {
