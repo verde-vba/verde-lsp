@@ -159,11 +159,34 @@ const scrum: ScrumDashboard = {
         {
           action: "Me. 特殊ケースを追加するだけで Class module の補完が実現できた — 既存の dot-access 設計が拡張点として機能した",
           timing: "sprint",
+          status: "completed",
+          outcome: "Sprint N+48 で同パターンを PivotTable/Chart/Shape へ適用し、builtin type fallback として一般化に成功",
+        },
+        {
+          action: "テスト追記は cat >> より Edit ツールを使う方が fmt 差分を事前に制御しやすい",
+          timing: "sprint",
+          status: "completed",
+          outcome: "Sprint N+48 で Edit ツールをテスト追記に使用し、fmt 差分ゼロを維持",
+        },
+      ],
+    },
+    {
+      sprint: 48,
+      improvements: [
+        {
+          action: "excel_model/types.rs への型定義追加 → completion.rs の fallback 実装という Tidy First 順序を維持する",
+          timing: "sprint",
           status: "active",
           outcome: null,
         },
         {
-          action: "テスト追記は cat >> より Edit ツールを使う方が fmt 差分を事前に制御しやすい",
+          action: "regression テスト (existing_range_dot_completion_still_works) を各 PBI で必ず追加し、既存補完の劣化を即検出できる体制を保つ",
+          timing: "sprint",
+          status: "active",
+          outcome: null,
+        },
+        {
+          action: "PBI-46 (textDocument/formatting) 着手前にスコープ見積もりを行い、indent 整形のみ / case 整形のみ に分割できるか検討する",
           timing: "sprint",
           status: "active",
           outcome: null,
