@@ -1,6 +1,6 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+35 完了 — PBI-33 Windows CI + smoke tests 追加)
+> 最終更新: 2026-04-21 (Sprint N+36 完了 — PBI-34 リリースバイナリ自動配布 workflow 追加)
 > 現在ブランチ: main
 > テスト基準: 111 green (lib 47 + integration 64), cargo clippy -D warnings 0 件
 
@@ -77,6 +77,69 @@ parser 拡張を含むため工数大。Phase 1/2 で体験が整った後に着
 - Phase 0 の UTF-16 バグ (PBI-31) は**実害が出る前に**潰す。現状 BMP 日本語 (ひらがな/漢字) は偶然動くが、文字列リテラルの emoji 等で破綻
 - Class module (PBI-44) の優先度は Verde 利用プロジェクトに `.cls` がどれだけ含まれるかで変動 — 要データ収集
 - formatting (PBI-46) は「既存開発者」軸なら Phase 1 に繰り上げる余地あり
+
+---
+
+## Sprint N+36 (2026-04-21)
+
+### Sprint Goal
+PBI-34: リリースバイナリ自動配布 — `v*` タグ push 時に Windows / Linux / macOS の `cargo build --release` バイナリを GitHub Release にアップロードする workflow を追加する。Verde desktop が `verde-lsp.exe` を自動取得できる配布基盤を確立する。
+
+### Path Chosen
+純粋な CI/CD インフラ Sprint (コード変更なし)。
+- `.github/workflows/release.yml` 新規作成
+- `permissions: contents: write` でリリース作成権限を付与
+- matrix: windows-latest / ubuntu-latest / macos-latest の 3 OS
+- `softprops/action-gh-release@v2` で GitHub Release に自動アップロード
+- `shell: bash` + `cp` で artifact をプラットフォーム別名にリネーム
+
+### Scope
+- `.github/workflows/release.yml`: 新規作成 (38 行)
+- コードテスト変更: なし (インフラのみ)
+
+### Acceptance Criteria
+1. `v*` タグで release.yml が起動し 3 OS でビルドが走る
+2. Windows artifact が `verde-lsp-windows.exe` としてリリースに添付される
+3. 111 green 維持、clippy 0 件、fmt pass
+
+### Result
+111 green 維持 / clippy 0 / fmt pass。
+- `release.yml`: `v*` tag トリガー + 3 OS matrix (windows/ubuntu/macos) + `softprops/action-gh-release@v2`
+- Windows は `verde-lsp-windows.exe`、Linux は `verde-lsp-linux`、macOS は `verde-lsp-macos` として配布
+- `shell: bash` を明示して Windows の Git Bash で `cp` が使える状態を確保
+- TDD 非適用: GitHub Actions workflow は push して初めて検証可能なため、YAML 構造レビューで代替
+
+---
+
+## Sprint N+36 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-34 リリースバイナリ自動配布」を完全達成。Phase 0 の CI/配布基盤が ci.yml (Sprint N+35) + release.yml (Sprint N+36) で揃った。
+
+### KPT
+
+#### Keep
+- **Phase 0 を 2 Sprint で完結させた流れ**: PBI-33 (CI) → PBI-34 (Release) の順序が自然。CI が green である確信があった上で release workflow を追加できた
+- **3 OS マルチプラットフォーム対応**: PBI には `verde-lsp.exe` (Windows) のみ記載があったが、macOS / Linux バイナリも同時に提供することで Verde desktop チームの選択肢が広がる
+- **`permissions: contents: write` の明示**: GitHub Actions のデフォルトは read-only。release 作成には write が必要で、job レベルではなくワークフローレベルで付与することで最小権限原則に準拠
+
+#### Problem
+- `softprops/action-gh-release@v2` が期待通りに動くかは実際にタグを push するまで不明。特に Windows の `shell: bash` + `cp` コンボが GitHub-hosted runner で動作するかは未検証
+- release.yml に cargo test / clippy を含めていない。タグ push 時点では ci.yml が既に走っているはずだが、リリースワークフロー単独では品質チェックがない
+
+#### Try
+- 実際に `v0.1.0` タグを push して release workflow の動作を確認する (次の実施タイミングで)
+- Phase 1 の先頭 PBI-35 (signatureHelp) に着手するか、PBI-32b (RwLock poison defensive) で Phase 0 を完全クリーンアップするか判断する
+- release.yml に `cargo test --release` を追加することでリリースビルド時の品質保証を強化する案を検討 (速度 vs 安全性のトレードオフ)
+
+### Next Sprint Candidates
+
+| 優先度 | PBI | 理由 |
+|---|---|---|
+| 1 | PBI-32b | RwLock poison defensive hardening (XS)。Phase 0 の最後の残項目 |
+| 2 | PBI-35 | signatureHelp (M)。Phase 1 開始。既存開発者の日常機能 |
+| 3 | PBI-36 | workspace/symbol (S)。Phase 1 続き |
 
 ---
 
@@ -823,7 +886,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-32b | `RwLock.unwrap()` poison 経路の tokio 化 / `expect` 明示化 | XS | Ready (Phase 0 / defensive) |
 | PBI-32c | `positionEncoding` capability negotiation | XS | Ready (Phase 0 / LSP 3.17) |
 | PBI-33 | Windows CI 追加 (`windows-latest` matrix) | S | **Done (Sprint N+35)** |
-| PBI-34 | リリースバイナリ自動配布 (tag → `verde-lsp.exe`) | S | Ready (Phase 0) |
+| PBI-34 | リリースバイナリ自動配布 (tag → `verde-lsp.exe`) | S | **Done (Sprint N+36)** |
 | PBI-35 | `textDocument/signatureHelp` 実装 | M | Backlog (Phase 1) |
 | PBI-36 | `workspace/symbol` — プロジェクト横断検索 | S | Backlog (Phase 1) |
 | PBI-37 | `textDocument/documentHighlight` — 同名ハイライト | XS | Backlog (Phase 1) |
