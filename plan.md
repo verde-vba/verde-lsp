@@ -8,7 +8,18 @@
 
 ## 次 Sprint 推奨 (Sprint N+15)
 
-**Sprint Goal 候補**: PBI-13 — workbook-context.json tables/named_ranges 補完拡張 (S) または diagnostics のさらなる精度向上
+**Sprint Goal**: PBI-13 を完遂し、workbook-context.json から tables/named_ranges も補完候補に追加する
+
+### PBI-13 — workbook-context.json tables/named_ranges 補完拡張 (XS) ✅ Ready
+
+| 項目 | 内容 |
+|------|------|
+| **目的** | `workbook-context.json` の `tables` / `named_ranges` フィールドも completion 候補に追加する。 |
+| **背景** | PBI-11 で `sheets` のみ実装。CLAUDE.md は table/named_range 補完も言及。`WorkbookContext` に 2 フィールドを追加し `complete()` に 2 ループを加えるだけ。 |
+| **実装方針** | `WorkbookContext` に `tables: Vec<String>` / `named_ranges: Vec<String>` を追加（`#[serde(default)]`）。`AnalysisHost` に `workbook_tables()` / `workbook_named_ranges()` を追加。`complete()` の末尾に 2 ループ（kind=MODULE/CONSTANT）。 |
+| **受入基準** | (1) `workbook_tables(["Table1"])` 設定後に `Table1` が補完候補に出る。(2) `workbook_named_ranges(["MyRange"])` 設定後に `MyRange` が補完候補に出る。(3) 73+ green, clippy 0。 |
+| **見積サイズ** | XS |
+| **依存** | PBI-11 (完了済み) |
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -263,6 +274,7 @@
 | PBI-09c | クロスモジュール diagnostics (undeclared 誤検出除外) | S | **Done** |
 | PBI-10 | For Each ループ変数 undeclared 誤検出除外 | S | **Won't Do** (already working) |
 | PBI-11 | workbook-context.json シート名補完 | M | **Done** |
+| PBI-13 | workbook-context.json tables/named_ranges 補完拡張 | XS | **Ready** |
 | PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
