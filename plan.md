@@ -1,8 +1,8 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+24 完了)
+> 最終更新: 2026-04-21 (Sprint N+25 完了)
 > 現在ブランチ: main
-> テスト基準: 94 green (lib 36 + integration 58), cargo clippy -D warnings 0 件
+> テスト基準: 96 green (lib 36 + integration 60), cargo clippy -D warnings 0 件
 
 ---
 
@@ -142,11 +142,53 @@ PBI-22: rename のパラメータスコープ対応 — procedure params も pro
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+25)
+## 次 Sprint 推奨 (Sprint N+26)
 
 **Sprint Goal 候補**:
-1. symbol kind 対応 (completion/hover での種別表示改善) — S
-2. goto-def for parameters (パラメータの定義ジャンプ) — XS
+1. hover scope-aware 対応 (hover.rs の同名シンボル選択を proc_scope 優先に) — XS
+2. symbol kind 対応 (completion/hover での種別表示改善) — S
+
+---
+
+## Sprint N+25 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-23 scope-aware parameter goto-def」を完全達成。
+
+### KPT
+
+#### Keep
+- Test 1 (Sub A 内カーソル) は `.first()` の挿入順で偶然 PASS — Test 2 (Sub B 内カーソル) が正しく RED になり、実装の不備を明示した。対称的なテスト対を追加する習慣が有効。
+- `proc_ranges` + `proc_scope` の組み合わせは rename / goto-def で共通パターン化。同じ 3-5 行で containing_proc 特定が書ける。
+
+#### Problem
+- `definition.rs` の `find_symbol_by_name().first()` は PBI-23 まで scope-aware でなかった。同様の問題が `hover.rs` などにも潜在する可能性がある。
+
+#### Try
+- hover.rs の symbol 選択も同名ローカル変数/パラメータで正しく scope-aware か確認する (次 Sprint 候補)。
+
+---
+
+## Sprint N+25 (2026-04-21)
+
+### Sprint Goal
+PBI-23: goto-def for parameters — 同名パラメータを持つ複数 procedure がある場合に、cursor がある procedure のパラメータ宣言へ正しくジャンプする (scope-aware goto-def)
+
+### Path Chosen
+`definition.rs` の `find_symbol_by_name(...).first()` を scope-aware 選択に変更。`position_to_offset` + `proc_ranges` で containing_proc を特定し、`proc_scope` が一致するシンボルを優先。fallback として先頭シンボル (既存動作) を維持。rename.rs の proc_constraint 決定ロジックと対称な実装。
+
+### Scope
+- `tests/definition.rs` に 2 テスト追加 (RED)
+  - `goto_def_parameter_from_use_site_jumps_to_owning_proc_param`
+  - `goto_def_parameter_in_second_proc_jumps_to_its_own_param`
+- `src/definition.rs` の `goto_definition` を scope-aware に変更 (GREEN)
+
+### Acceptance Criteria
+1. 同名パラメータを持つ 2 つの Sub で、Sub A 内 use site から goto-def → Sub A のパラメータ宣言 (line 0, col 6)
+2. Sub B 内 use site から goto-def → Sub B のパラメータ宣言 (line 3, col 6)
+3. 既存 4 tests (call site / bare call / local variable / cross-module) は回帰なし
+4. cargo test 94 → 96 green, clippy -D warnings 0 件
 
 ---
 
@@ -206,6 +248,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-20 | Private シンボルの cross-file rename 抑止 | XS | **Done** |
 | PBI-21 | intra-file scope-aware rename (proc_scope 尊重) | XS | **Done** |
 | PBI-22 | rename パラメータスコープ対応 (proc_constraint 確認) | XS | **Done** |
+| PBI-23 | goto-def scope-aware (同名パラメータを含む procedure で正しくジャンプ) | XS | **Done** |
 
 ---
 
