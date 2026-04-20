@@ -1,10 +1,11 @@
 use tower_lsp::lsp_types::*;
 
+use crate::analysis::resolve::position_to_offset;
+use crate::analysis::symbols::{SymbolKind, SymbolTable};
 use crate::analysis::AnalysisHost;
-use crate::analysis::symbols::SymbolKind;
 use crate::vba_builtins;
 
-pub fn complete(host: &AnalysisHost, uri: &Url, _position: Position) -> Vec<CompletionItem> {
+pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<CompletionItem> {
     let mut items = Vec::new();
 
     // VBA keywords
@@ -25,29 +26,50 @@ pub fn complete(host: &AnalysisHost, uri: &Url, _position: Position) -> Vec<Comp
         });
     }
 
-    // Symbols from current file
-    if let Some(symbols) = host.symbol_table(uri) {
-        for sym in &symbols.symbols {
-            let kind = match sym.kind {
-                SymbolKind::Procedure => CompletionItemKind::METHOD,
-                SymbolKind::Function => CompletionItemKind::FUNCTION,
-                SymbolKind::Property => CompletionItemKind::PROPERTY,
-                SymbolKind::Variable => CompletionItemKind::VARIABLE,
-                SymbolKind::Constant => CompletionItemKind::CONSTANT,
-                SymbolKind::Parameter => CompletionItemKind::VARIABLE,
-                SymbolKind::TypeDef => CompletionItemKind::STRUCT,
-                SymbolKind::EnumDef => CompletionItemKind::ENUM,
-                SymbolKind::EnumMember => CompletionItemKind::ENUM_MEMBER,
-            };
-
-            items.push(CompletionItem {
-                label: sym.name.to_string(),
-                kind: Some(kind),
-                detail: sym.type_name.as_ref().map(|t| t.to_string()),
-                ..Default::default()
-            });
-        }
+    // Symbols from current file, filtered by cursor scope
+    if let Some(sym_items) = host.with_source(uri, |symbols, source| {
+        let cursor_scope = proc_at_position(symbols, source, position);
+        symbols
+            .symbols
+            .iter()
+            .filter(|sym| match &sym.proc_scope {
+                None => true,
+                Some(scope) => cursor_scope
+                    .as_deref()
+                    .is_some_and(|cs| cs.eq_ignore_ascii_case(scope.as_str())),
+            })
+            .map(|sym| {
+                let kind = match sym.kind {
+                    SymbolKind::Procedure => CompletionItemKind::METHOD,
+                    SymbolKind::Function => CompletionItemKind::FUNCTION,
+                    SymbolKind::Property => CompletionItemKind::PROPERTY,
+                    SymbolKind::Variable => CompletionItemKind::VARIABLE,
+                    SymbolKind::Constant => CompletionItemKind::CONSTANT,
+                    SymbolKind::Parameter => CompletionItemKind::VARIABLE,
+                    SymbolKind::TypeDef => CompletionItemKind::STRUCT,
+                    SymbolKind::EnumDef => CompletionItemKind::ENUM,
+                    SymbolKind::EnumMember => CompletionItemKind::ENUM_MEMBER,
+                };
+                CompletionItem {
+                    label: sym.name.to_string(),
+                    kind: Some(kind),
+                    detail: sym.type_name.as_ref().map(|t| t.to_string()),
+                    ..Default::default()
+                }
+            })
+            .collect::<Vec<_>>()
+    }) {
+        items.extend(sym_items);
     }
 
     items
+}
+
+fn proc_at_position(symbols: &SymbolTable, source: &str, position: Position) -> Option<smol_str::SmolStr> {
+    let offset = position_to_offset(source, position)?;
+    symbols
+        .proc_ranges
+        .iter()
+        .find(|(_, range)| (range.start as usize) <= offset && offset < (range.end as usize))
+        .map(|(name, _)| name.clone())
 }
