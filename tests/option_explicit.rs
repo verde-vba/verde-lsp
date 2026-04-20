@@ -215,3 +215,44 @@ fn does_not_warn_on_do_while_with_declared_condition() {
         "Do While loop with declared condition variable",
     );
 }
+
+#[test]
+fn cross_module_public_symbol_not_flagged_as_undeclared() {
+    // Module A: "F" in "Foo" is col=0 on its own line
+    let uri_a: Url = "file:///module_a.bas".parse().unwrap();
+    let src_a = "Public Sub Foo()\nEnd Sub\n";
+
+    // Module B: Option Explicit + calls Foo — must NOT produce an undeclared warning for Foo
+    let uri_b: Url = "file:///module_b.bas".parse().unwrap();
+    let src_b = "Option Explicit\n\nSub Main()\n    Foo\nEnd Sub\n";
+
+    let host = AnalysisHost::new();
+    host.update(uri_a.clone(), src_a.to_string(), parser::parse(src_a));
+    host.update(uri_b.clone(), src_b.to_string(), parser::parse(src_b));
+
+    let diags = host.diagnostics(&uri_b);
+    assert!(
+        !diags.iter().any(|d| d.message.contains("Foo")),
+        "expected no undeclared warning for Foo (defined as Public in other module), got: {diags:?}"
+    );
+}
+
+#[test]
+fn cross_module_truly_undeclared_still_detected() {
+    let uri_a: Url = "file:///module_a.bas".parse().unwrap();
+    let src_a = "Public Sub Foo()\nEnd Sub\n";
+
+    // Bar is NOT defined in any module — must still warn
+    let uri_b: Url = "file:///module_b.bas".parse().unwrap();
+    let src_b = "Option Explicit\n\nSub Main()\n    Bar\nEnd Sub\n";
+
+    let host = AnalysisHost::new();
+    host.update(uri_a.clone(), src_a.to_string(), parser::parse(src_a));
+    host.update(uri_b.clone(), src_b.to_string(), parser::parse(src_b));
+
+    let diags = host.diagnostics(&uri_b);
+    assert!(
+        diags.iter().any(|d| d.message.contains("Bar")),
+        "expected undeclared warning for Bar (not defined anywhere), got: {diags:?}"
+    );
+}
