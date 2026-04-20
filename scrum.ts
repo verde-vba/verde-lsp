@@ -55,15 +55,27 @@ const scrum: ScrumDashboard = {
       },
       acceptance_criteria: [
         {
-          criterion: "PivotTable / Chart / Shape の主要プロパティ・メソッドが補完に現れる",
-          verification: "completion テストが green",
+          criterion: "`Dim pt As PivotTable\\npt.` と入力した時点で PivotTable の主要プロパティ・メソッドが補完候補に現れる",
+          verification: "pt_dot_completion_returns_pivottable_members テストが green",
         },
         {
-          criterion: "cargo clippy 0 件 / cargo fmt pass",
+          criterion: "`Dim ch As Chart\\nch.` と入力した時点で Chart の主要プロパティ・メソッドが補完候補に現れる",
+          verification: "chart_dot_completion_returns_chart_members テストが green",
+        },
+        {
+          criterion: "`Dim sh As Shape\\nsh.` と入力した時点で Shape の主要プロパティ・メソッドが補完候補に現れる",
+          verification: "shape_dot_completion_returns_shape_members テストが green",
+        },
+        {
+          criterion: "既存 Range / Worksheet / Workbook / Application の dot-access 補完が引き続き動作する",
+          verification: "既存 completion テスト群が green のまま維持される",
+        },
+        {
+          criterion: "cargo clippy -D warnings 0 件 / cargo fmt pass",
           verification: "just clippy && just fmt",
         },
       ],
-      status: "draft",
+      status: "ready",
     },
     {
       id: "PBI-46",
