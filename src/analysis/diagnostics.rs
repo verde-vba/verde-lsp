@@ -36,72 +36,33 @@ pub fn compute(
 
 /// Happy-path Option Explicit diagnostic.
 ///
-/// Scans all `Ident` tokens in the source and emits a Warning for any
-/// identifier that is not:
+/// For each procedure in the module, re-lex the procedure's body (scoped via
+/// `ProcedureNode.body_range`) and walk tokens with a small state machine,
+/// emitting a Warning for any identifier that is not:
 /// - declared at module level (symbol table)
 /// - a VBA keyword
-/// - a builtin function
-/// - a builtin type
+/// - a builtin function or type
+/// - a VBA-in-Excel global (Application members)
+/// - a procedure parameter of the enclosing procedure
+/// - a local declared via `Dim`/`Static`/`Const`/`ReDim` earlier in the body
 ///
-/// Identifiers that fall inside a module-level *declaration span*
-/// (Variable/Const/TypeDef/EnumDef) are skipped — those are the declaration
-/// sites themselves, not references. Identifiers inside procedure bodies are
-/// still scanned (the parser currently does not parse procedure bodies in
-/// detail; a procedure's `span` covers the entire `Sub..End Sub`, so skipping
-/// the procedure span wholesale would hide all body references we want to
-/// check). As a compromise, we only skip the procedure's *signature* region
-/// (name + declared parameters) heuristically by skipping the line containing
-/// `Sub`/`Function`/`Property`.
+/// Because scanning is scoped to `body_range`, module-level declaration sites
+/// and procedure signatures are out of scope by construction — no heuristic
+/// span-skipping is required.
 ///
 /// Known deferred edge cases (Phase 2 happy path):
-/// - Local `Dim` inside procedures: bodies aren't parsed, so locals will be
-///   flagged as undeclared.
-/// - Procedure parameters: not captured in the symbol table; also flagged.
-/// - Member access (`x.Value`): the rhs after `.` is still lexed as `Ident`.
-/// - `With` blocks, `For i = 1 To 10` loop variables, assignment lhs vs rhs.
+/// - `With` blocks, `For i = 1 To 10` loop variables, and assignment lhs vs
+///   rhs are not yet distinguished — covered only by the existing state
+///   machine's coarse handling.
+/// - Nested procedures are not a concern (VBA disallows them).
 pub fn check_option_explicit(
     ast: &Ast,
     source: &str,
     symbols: &SymbolTable,
 ) -> Vec<Diagnostic> {
-    // Collect spans that should be skipped entirely. These cover module-level
-    // *declarations* (Type/Enum/Variable/Const) where the contained
-    // identifiers are declaration sites, not references.
-    let mut skip_spans: Vec<TextRange> = Vec::new();
-
-    // Collect procedure signature line spans — approximate: from procedure
-    // span start to the first newline after it. Parameters declared in the
-    // signature should not trigger undeclared warnings.
-    let mut signature_spans: Vec<TextRange> = Vec::new();
-
-    // Parameter names harvested from ProcedureNode.params (populated by the
-    // parser). Used to seed `local_declared` so parameter references inside
-    // the body aren't flagged under Option Explicit.
-    let mut parameter_names: Vec<String> = Vec::new();
-
-    for (_, node) in ast.nodes.iter() {
-        match node {
-            AstNode::Variable(v) => skip_spans.push(v.span),
-            AstNode::TypeDef(t) => skip_spans.push(t.span),
-            AstNode::EnumDef(e) => skip_spans.push(e.span),
-            AstNode::Procedure(p) => {
-                let start = p.span.start as usize;
-                let end_of_line = source[start..]
-                    .find('\n')
-                    .map(|off| start + off)
-                    .unwrap_or(source.len());
-                signature_spans.push(TextRange::new(start, end_of_line));
-                for param_id in &p.params {
-                    if let AstNode::Parameter(param) = &ast.nodes[*param_id] {
-                        parameter_names.push(param.name.to_ascii_lowercase());
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    // Build the "declared or builtin" lowercase set.
+    // Build the "declared or builtin" lowercase set. This set is
+    // module-global: every procedure body scan sees the same set plus its
+    // own procedure-scoped locals and parameters.
     let mut declared: std::collections::HashSet<String> =
         std::collections::HashSet::new();
     for sym in &symbols.symbols {
@@ -123,46 +84,76 @@ pub fn check_option_explicit(
         declared.insert(name.to_ascii_lowercase());
     }
 
-    let tokens = lexer::lex(source);
     let mut diagnostics = Vec::new();
 
-    // Token-context state machine:
-    // - `prev_token` is the previous non-trivia token (trivia = Newline/Comment).
-    //   Used to detect `.Ident` (member access RHS) and `As Ident` (type position).
-    // - `in_decl_list` is true when we're inside a Dim/Static/Private/Public/
-    //   Const/ReDim list, until the statement ends (Newline) or we hit `As`
-    //   (after which the next identifier is a type, not a declared name).
-    // - Declared local names from Dim/etc. LHS are accumulated into
-    //   `local_declared` and added to the "is declared" set for the remainder
-    //   of the scan.
-    let mut prev_token: Option<Token> = None;
-    let mut in_decl_list = false;
-    // After `As` we expect a type identifier next, even if we were inside a
-    // Dim list; after that identifier, control returns to the Dim list only if
-    // a comma follows.
-    let mut expecting_type = false;
-    let mut local_declared: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
-    // Seed with procedure parameter names so their use inside the body
-    // doesn't trigger undeclared warnings.
-    for name in &parameter_names {
-        local_declared.insert(name.clone());
+    for (_, node) in ast.nodes.iter() {
+        let proc = match node {
+            AstNode::Procedure(p) => p,
+            _ => continue,
+        };
+
+        let body_start = proc.body_range.start as usize;
+        let body_end = proc.body_range.end as usize;
+        if body_start >= body_end {
+            continue;
+        }
+        let body_source = &source[body_start..body_end];
+
+        // Seed per-procedure local scope with parameter names.
+        let mut local_declared: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for param_id in &proc.params {
+            if let AstNode::Parameter(param) = &ast.nodes[*param_id] {
+                local_declared.insert(param.name.to_ascii_lowercase());
+            }
+        }
+
+        scan_body(
+            body_source,
+            body_start,
+            source,
+            &declared,
+            &mut local_declared,
+            &mut diagnostics,
+        );
     }
 
+    diagnostics
+}
+
+/// Re-lex a procedure body slice and emit Option Explicit warnings for any
+/// undeclared identifier references. Token spans from the body's lexer are
+/// relative to the slice; we rebase them to absolute source offsets via
+/// `body_start_abs` before producing LSP ranges.
+fn scan_body(
+    body_source: &str,
+    body_start_abs: usize,
+    source: &str,
+    declared: &std::collections::HashSet<String>,
+    local_declared: &mut std::collections::HashSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let tokens = lexer::lex(body_source);
+
+    // Token-context state machine (per procedure):
+    // - `prev_token` is the previous non-trivia token (trivia = Comment).
+    //   Used to detect `.Ident` (member access RHS) and `As Ident` (type pos).
+    // - `in_decl_list` is true inside a Dim/Static/Private/Public/Const/ReDim
+    //   list, until the statement ends (Newline/Colon) or we hit `As` (after
+    //   which the next identifier is a type).
+    // - Declared local names from the lhs of Dim-style decls are accumulated
+    //   into `local_declared` for the remainder of the scan.
+    let mut prev_token: Option<Token> = None;
+    let mut in_decl_list = false;
+    let mut expecting_type = false;
+
     for spanned in &tokens {
-        // Update decl-list state BEFORE handling identifiers so the keyword
-        // that starts a decl list flips the flag in time for the next ident.
         match spanned.token {
             Token::Dim | Token::Static | Token::Const | Token::ReDim => {
                 in_decl_list = true;
                 expecting_type = false;
             }
             Token::Private | Token::Public => {
-                // These can start decl lists at module level or qualify
-                // procedures. Treat conservatively: enable decl list; it gets
-                // cleared on Newline if it was a procedure decl (Sub/Function
-                // lives on the signature line, whose identifiers are already
-                // skipped via signature_spans).
                 in_decl_list = true;
                 expecting_type = false;
             }
@@ -170,9 +161,6 @@ pub fn check_option_explicit(
                 expecting_type = true;
             }
             Token::Comma => {
-                // Inside a Dim list, a comma means another declared name
-                // follows. Clear "expecting_type" so we treat the next ident
-                // as a declaration name again.
                 if in_decl_list {
                     expecting_type = false;
                 }
@@ -185,38 +173,27 @@ pub fn check_option_explicit(
         }
 
         if spanned.token != Token::Identifier {
-            // Track previous non-trivia token for lookback on the next ident.
             if !matches!(spanned.token, Token::Comment) {
                 prev_token = Some(spanned.token.clone());
             }
             continue;
         }
-        let offset = spanned.span.start;
         let lower = spanned.text.to_ascii_lowercase();
-
-        // Context-based suppression for this identifier.
         let after_dot = matches!(prev_token, Some(Token::Dot));
         let after_as = matches!(prev_token, Some(Token::As));
 
-        // If we're inside a Dim-style decl list and NOT in a type position,
-        // this identifier is a declared name: record it and skip warning.
         if in_decl_list && !expecting_type && !after_dot {
             local_declared.insert(lower.clone());
             prev_token = Some(Token::Identifier);
             continue;
         }
 
-        // After `.`, skip entirely — it's a member access RHS.
         if after_dot {
             prev_token = Some(Token::Identifier);
             continue;
         }
 
-        // After `As`, this identifier is a type reference. Skip it
-        // (covers user-defined types, which the symbol table may or may not
-        // contain; being conservative here).
         if after_as {
-            // Clear expecting_type once the type ident is consumed.
             expecting_type = false;
             prev_token = Some(Token::Identifier);
             continue;
@@ -224,18 +201,14 @@ pub fn check_option_explicit(
 
         prev_token = Some(Token::Identifier);
 
-        if in_any_span(offset, &skip_spans) || in_any_span(offset, &signature_spans) {
-            continue;
-        }
-
         if declared.contains(&lower) || local_declared.contains(&lower) {
             continue;
         }
 
-        let range = text_range_to_lsp_range(
-            source,
-            TextRange::new(spanned.span.start, spanned.span.end),
-        );
+        // Rebase the body-relative token span to absolute source offsets.
+        let abs_start = body_start_abs + spanned.span.start;
+        let abs_end = body_start_abs + spanned.span.end;
+        let range = text_range_to_lsp_range(source, TextRange::new(abs_start, abs_end));
         diagnostics.push(Diagnostic {
             range,
             severity: Some(DiagnosticSeverity::WARNING),
@@ -247,12 +220,4 @@ pub fn check_option_explicit(
             ..Default::default()
         });
     }
-
-    diagnostics
-}
-
-fn in_any_span(offset: usize, spans: &[TextRange]) -> bool {
-    spans
-        .iter()
-        .any(|s| offset >= s.start as usize && offset < s.end as usize)
 }
