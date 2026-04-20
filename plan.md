@@ -1,14 +1,14 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+13 完了)
+> 最終更新: 2026-04-21 (Sprint N+14 完了)
 > 現在ブランチ: main
-> テスト基準: 70 green (lib 36 + integration 34), cargo clippy -D warnings 0 件
+> テスト基準: 71 green (lib 36 + integration 35), cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+14)
+## 次 Sprint 推奨 (Sprint N+15)
 
-**Sprint Goal 候補**: PBI-11 — workbook-context.json シート名補完 (workspace root 取得が前提作業)
+**Sprint Goal 候補**: PBI-13 — workbook-context.json tables/named_ranges 補完拡張 (S) または diagnostics のさらなる精度向上
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -58,6 +58,37 @@
 
 #### Try
 - `check_option_explicit` の引数が 5 個を超えた時点で `DiagnosticsContext` 構造体を導入する。
+
+---
+
+## Sprint N+14 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-11 workbook-context.json シート名補完」を完全達成。
+
+### KPT
+
+#### Keep
+- Tidy First (構造追加) → RED → GREEN の 4 コミット構成が Medium PBI を安全に完遂する手順として有効。
+- `std::sync::RwLockReadGuard` を `.await` 前に `clone()` して drop するパターン (`let root = self.root_uri.read().unwrap().clone();`) がコンパイルエラー 1 件で即座に解決できた。コメントで理由を残し将来のメンテに備えた。
+- `WorkbookContext` に `Default` derive を付けたことで `set_workbook_context` を呼ばない既存テストがそのまま動作した。
+
+#### Problem
+- `workbook-context.json` の `tables`/`named_ranges` フィールドは定義済みだが未使用。MVP 完了後に補完拡張が必要。
+
+#### Try
+- PBI-13 として tables/named_ranges を completion に追加する Small スプリントを計画する。
+
+---
+
+## 完了済み (Sprint N+14)
+
+| コミット | 内容 |
+|----------|------|
+| `4b4bfba` | refactor: WorkbookContext 構造体追加 + AnalysisHost/VbaLanguageServer 構造準備 (Tidy First PBI-11) |
+| `9b47ead` | test: workbook-context.json シート名補完 RED テスト (PBI-11) |
+| `75afdda` | feat: workbook-context.json シート名を completion 候補に追加 (PBI-11) |
 
 ---
 
@@ -231,7 +262,7 @@
 |-----|----------|--------|------|
 | PBI-09c | クロスモジュール diagnostics (undeclared 誤検出除外) | S | **Done** |
 | PBI-10 | For Each ループ変数 undeclared 誤検出除外 | S | **Won't Do** (already working) |
-| PBI-11 | workbook-context.json シート名補完 | M | Backlog (Not Ready) |
+| PBI-11 | workbook-context.json シート名補完 | M | **Done** |
 | PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
