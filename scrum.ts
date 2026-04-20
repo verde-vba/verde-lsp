@@ -94,7 +94,7 @@ const scrum: ScrumDashboard = {
     },
   ],
 
-  sprint: null, // Sprint N+49 (Planning) completed — see plan.md PBI-46 Refinement section
+  sprint: null,
 
   definition_of_done: {
     checks: [
@@ -105,6 +105,13 @@ const scrum: ScrumDashboard = {
   },
 
   completed: [
+    {
+      number: 50,
+      pbi_id: "PBI-46 (α)",
+      goal: "textDocument/formatting — keyword case 正規化 + 行末空白除去 + LSP provider 配線",
+      status: "done",
+      subtasks: [],
+    },
     {
       number: 49,
       pbi_id: "PBI-46 (planning)",
@@ -174,6 +181,29 @@ const scrum: ScrumDashboard = {
           timing: "sprint",
           status: "completed",
           outcome: "Sprint N+48 で Edit ツールをテスト追記に使用し、fmt 差分ゼロを維持",
+        },
+      ],
+    },
+    {
+      sprint: 50,
+      improvements: [
+        {
+          action: "apply_formatting の pure function 先行 → LSP handler 配線の Tidy First 順序を Sprint β (N+51) でも維持する",
+          timing: "sprint",
+          status: "active",
+          outcome: null,
+        },
+        {
+          action: "indent 正規化 (β) では ElseIf/Else/Case の depth 例外処理を先にテストで文書化し、実装前に仕様を確定する",
+          timing: "sprint",
+          status: "active",
+          outcome: null,
+        },
+        {
+          action: "document_end_position の UTF-16 encode_utf16().count() パターンを indent 正規化後も維持 (文字列リテラル内 Unicode 対応)",
+          timing: "sprint",
+          status: "active",
+          outcome: null,
         },
       ],
     },
