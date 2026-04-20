@@ -8,7 +8,18 @@
 
 ## 次 Sprint 推奨 (Sprint N+19)
 
-**Sprint Goal 候補**: 新規 PBI を Refinement 後に実行
+**Sprint Goal**: PBI-17 を完遂し、textDocument/rename をクロスファイルに拡張する
+
+### PBI-17 — textDocument/rename クロスファイル拡張 (S) ✅ Ready
+
+| 項目 | 内容 |
+|------|------|
+| **目的** | `rename` が宣言ファイルのみでなく全ファイルの呼び出し箇所も `WorkspaceEdit` に含めるよう拡張する。 |
+| **背景** | PBI-16 で `all_file_sources()` を追加済み。`rename.rs` が単一ファイルのみ検索するため他モジュールの呼び出し箇所が rename に含まれない。 |
+| **実装方針** | `host.with_source(uri, ...)` による単一ファイル処理を `host.all_file_sources()` ループに変更。word 取得と guard は現在ファイルのみで行い、テキスト検索を全ファイルに拡張する。 |
+| **受入基準** | (1) 2 ファイル workspace で ModuleA の Foo を rename すると ModuleB の呼び出し箇所も WorkspaceEdit に含まれる。(2) 81+ green, clippy 0。 |
+| **見積サイズ** | S |
+| **依存** | PBI-16 (完了済み) |
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -388,6 +399,7 @@
 | PBI-14 | workbook-context.json 自動再読み込み (didChangeWatchedFiles) | S | **Done** |
 | PBI-15 | textDocument/references プロバイダ実装 | XS | **Done** |
 | PBI-16 | textDocument/references クロスファイル拡張 | S | **Done** |
+| PBI-17 | textDocument/rename クロスファイル拡張 | S | **Ready** |
 | PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
