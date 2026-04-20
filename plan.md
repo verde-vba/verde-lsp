@@ -1,8 +1,8 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+39 完了 — PBI-37 documentHighlight 実装)
+> 最終更新: 2026-04-21 (Sprint N+40 完了 — PBI-36 workspace/symbol 実装)
 > 現在ブランチ: main
-> テスト基準: 116 green (lib 47 + integration 69), cargo clippy -D warnings 0 件
+> テスト基準: 118 green (lib 47 + integration 71), cargo clippy -D warnings 0 件
 
 ---
 
@@ -105,7 +105,7 @@
 | PBI-33 | Windows CI 追加 (`windows-latest` matrix) | S | **Done (Sprint N+35)** |
 | PBI-34 | リリースバイナリ自動配布 (tag → `verde-lsp.exe`) | S | **Done (Sprint N+36)** |
 | PBI-35 | `textDocument/signatureHelp` 実装 | M | **Done (Sprint N+38)** |
-| PBI-36 | `workspace/symbol` — プロジェクト横断検索 | S | Backlog (Phase 1) |
+| PBI-36 | `workspace/symbol` — プロジェクト横断検索 | S | **Done (Sprint N+40)** |
 | PBI-37 | `textDocument/documentHighlight` — 同名ハイライト | XS | **Done (Sprint N+39)** |
 | PBI-38 | `textDocument/foldingRange` — ブロック折りたたみ | S | Backlog (Phase 1) |
 | PBI-39 | `textDocument/codeAction` — "Dim を追加" quick fix | M | Backlog (Phase 1) |
