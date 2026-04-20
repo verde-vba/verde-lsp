@@ -1,14 +1,14 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+12 完了)
+> 最終更新: 2026-04-21 (Sprint N+13 完了)
 > 現在ブランチ: main
-> テスト基準: 68 green (lib 36 + integration 32), cargo clippy -D warnings 0 件
+> テスト基準: 70 green (lib 36 + integration 34), cargo clippy -D warnings 0 件
 
 ---
 
-## 次 Sprint 推奨 (Sprint N+13)
+## 次 Sprint 推奨 (Sprint N+14)
 
-**Sprint Goal 候補**: PBI-10 — diagnostics の精度向上 or PBI-11 — workbook-context.json 連携
+**Sprint Goal 候補**: PBI-11 — workbook-context.json シート名補完 (workspace root 取得が前提作業)
 
 ### PBI-10 — For Each ループ変数の undeclared 誤検出除外 ✅ Won't Do (Already Working)
 
@@ -58,6 +58,36 @@
 
 #### Try
 - `check_option_explicit` の引数が 5 個を超えた時点で `DiagnosticsContext` 構造体を導入する。
+
+---
+
+## Sprint N+13 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-12 ModuleA.Foo 修飾呼び出しの ModuleA undeclared 誤検出除外」を完全達成。
+
+### KPT
+
+#### Keep
+- `collect_other_module_names` という専用ヘルパーで「URI → モジュール名抽出」の責務を分離。`diagnostics` が膨らまず読みやすい。
+- `filter_map` で `path_segments().next_back().split('.').next()` を繋ぐ Rust イディオムが URI 操作を 1 行で表現できた。
+- REFACTOR 評価: `files.iter()` を 2 回走査するが型が異なるため統合は過剰と判断 → 変更なし。
+
+#### Problem
+- `path_segments()` は `file://` URI でのみ正しく動作する。`untitled:` や `vscode-vfs:` スキームでは意図しない結果になりうる。
+
+#### Try
+- URI スキームが `file` でない場合は module 名抽出をスキップするガードを将来追加する。
+
+---
+
+## 完了済み (Sprint N+13)
+
+| コミット | 内容 |
+|----------|------|
+| `ade8233` | test: ModuleA.Foo 修飾呼び出し RED テスト 2 件 (PBI-12) |
+| `30e7a03` | feat: ModuleA.Foo 修飾呼び出しの ModuleA undeclared 誤検出除外 (PBI-12) |
 
 ---
 
@@ -202,7 +232,7 @@
 | PBI-09c | クロスモジュール diagnostics (undeclared 誤検出除外) | S | **Done** |
 | PBI-10 | For Each ループ変数 undeclared 誤検出除外 | S | **Won't Do** (already working) |
 | PBI-11 | workbook-context.json シート名補完 | M | Backlog (Not Ready) |
-| PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Ready** |
+| PBI-12 | 修飾呼び出し ModuleA.Foo の ModuleA undeclared 誤検出除外 | S | **Done** |
 
 ---
 
