@@ -1,8 +1,52 @@
 # verde-lsp バックログ
 
-> 最終更新: 2026-04-21 (Sprint N+28 完了)
+> 最終更新: 2026-04-21 (Sprint N+29 完了)
 > 現在ブランチ: main
-> テスト基準: 100 green (lib 38 + integration 62), cargo clippy -D warnings 0 件
+> テスト基準: 101 green (lib 39 + integration 62), cargo clippy -D warnings 0 件
+
+---
+
+## Sprint N+29 (2026-04-21)
+
+### Sprint Goal
+PBI-27: Enum value parsing 対応 — `Enum X\n    A = 1\n    B = 2\nEnd Enum` 形式の integer literal 右辺を読み `Option<i64>` として `EnumDefNode.members` / `SymbolDetail::EnumMember.value` に格納する。これにより Sprint N+28 の retrospective Try 項目を解消し、hover の `EnumName.Member = N` レンダリングが実データで機能する。
+
+### Path Chosen
+Option (A) — `parse_enum_def` のループで Identifier を消費した直後に `try_parse_enum_member_value()` helper を呼び、`Eq` + `NumberLiteral` の 2 トークンを lookahead で読んで `i64::parse` する。負数 (`Minus + NumberLiteral`)・16 進 (`HexLiteral`)・定数式・他メンバ参照は全て `None` のまま (MVP スコープ維持)。
+
+### Scope
+- `src/parser/parse.rs` の `parse_enum_def` ループ拡張 (GREEN)
+- `src/parser/parse.rs` に `try_parse_enum_member_value` helper 追加 (GREEN)
+- `src/analysis/symbols.rs` のテストモジュールに `enum_member_with_explicit_value_captures_integer_literal` 追加 (RED → GREEN)
+
+### Acceptance Criteria
+1. `Enum Color\n    Red = 1\n    Green = 2\nEnd Enum` を parse すると Red.value == Some(1), Green.value == Some(2) になる
+2. 既存 `enum_member_symbol_has_enum_member_detail` (value 省略ケース) は回帰なし
+3. 負数・16 進・定数式は `None` のまま (既存動作維持、新規テスト不要)
+4. cargo test 100 → 101 green, clippy -D warnings 0 件, cargo fmt --check pass
+
+---
+
+## Sprint N+29 レトロスペクティブ (2026-04-21)
+
+### Sprint Goal 達成状況
+
+目標「PBI-27 Enum value parsing 対応」を完全達成。Sprint N+28 retrospective で記録した「parser の既知制限」が hover の `EnumMember` レンダリング実装と組み合わさり、実際の enum 宣言で value 表示が有効化された。
+
+### KPT
+
+#### Keep
+- PBI-26 で `SymbolDetail::EnumMember.value: Option<i64>` の拡張点を先に用意しておいたため、今回は parser 側 1 ファイルの変更のみで完結。変更差分は 22 行。
+- `try_parse_enum_member_value` を独立 helper に切り出しで、負数・16 進などの将来拡張時に編集点が局所化された。
+- `matches!(self.peek(), Some(t) if t.token == Token::Eq)` で Eq の lookahead を副作用なく判定し、Eq が無い場合は `pos` を進めない設計 — 既存の identifier-only ループと共存。
+
+#### Problem
+- 負数 (`Red = -1`) と 16 進 (`Red = &H10`) は実 VBA コードで頻出するが未対応。
+- enum member に値を持たないケース (VBA 仕様では前メンバ + 1 で implicit value) の計算は行わず `None` のまま。
+
+#### Try
+- PBI-28 候補: 負数 (`Minus + NumberLiteral`) と 16 進 (`HexLiteral`) の対応。helper 内の match を拡張するだけなので XS 見積。
+- PBI-29 候補: implicit value 計算 (`A` → 0, `B` → 1 など、前メンバ + 1)。parser か build_symbol_table のどちらで計算するかは別途検討。
 
 ---
 
@@ -379,6 +423,7 @@ Option (A) — 新規 LSP API、既存 `SymbolTable` を再利用
 | PBI-24 | hover scope-aware (同名パラメータを含む procedure で正しい型を表示) | XS | **Done** |
 | PBI-25 | SymbolDetail::Parameter 追加 — パラメータ登録の設計改善 | XS | **Done** |
 | PBI-26 | SymbolDetail::None 完全廃止 — EnumMember バリアント追加 | XS | **Done** |
+| PBI-27 | Enum value parsing 対応 — integer literal 右辺を i64 として格納 | XS | **Done** |
 
 ---
 
