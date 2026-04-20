@@ -270,4 +270,37 @@ mod tests {
             other => panic!("expected SymbolDetail::EnumMember, got {:?}", other),
         }
     }
+
+    #[test]
+    fn enum_member_with_explicit_value_captures_integer_literal() {
+        let result = parse("Enum Color\n    Red = 1\n    Green = 2\nEnd Enum\n");
+        let symbols = build_symbol_table(&result.ast);
+
+        let red = symbols
+            .symbols
+            .iter()
+            .find(|s| s.name.as_str() == "Red" && matches!(s.kind, SymbolKind::EnumMember))
+            .expect("expected enum member 'Red' in symbol table");
+        match &red.detail {
+            SymbolDetail::EnumMember { value, .. } => {
+                assert_eq!(*value, Some(1), "expected Red = 1, got {:?}", value);
+            }
+            other => panic!("expected SymbolDetail::EnumMember for Red, got {:?}", other),
+        }
+
+        let green = symbols
+            .symbols
+            .iter()
+            .find(|s| s.name.as_str() == "Green" && matches!(s.kind, SymbolKind::EnumMember))
+            .expect("expected enum member 'Green' in symbol table");
+        match &green.detail {
+            SymbolDetail::EnumMember { value, .. } => {
+                assert_eq!(*value, Some(2), "expected Green = 2, got {:?}", value);
+            }
+            other => panic!(
+                "expected SymbolDetail::EnumMember for Green, got {:?}",
+                other
+            ),
+        }
+    }
 }
