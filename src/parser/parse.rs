@@ -62,6 +62,22 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Advance past tokens that separate statements inside a procedure body:
+    /// Newline, Colon (VBA's `:` statement separator), LineContinuation, and
+    /// Comment. Called between statement emissions in the body loop to land
+    /// `pos` on the next meaningful token (or EOF / `End <kind>`).
+    fn skip_statement_separators(&mut self) {
+        while matches!(
+            self.peek(),
+            Some(t) if matches!(
+                t.token,
+                Token::Newline | Token::Colon | Token::LineContinuation | Token::Comment
+            )
+        ) {
+            self.pos += 1;
+        }
+    }
+
     fn parse_module(&mut self) {
         self.skip_newlines();
 
@@ -195,16 +211,7 @@ impl<'a> Parser<'a> {
         // Parse body statements until the matching End token (or EOF).
         let mut body: Vec<NodeId> = Vec::new();
         loop {
-            // Skip statement separators and comments between statements.
-            while matches!(
-                self.peek(),
-                Some(t) if matches!(
-                    t.token,
-                    Token::Newline | Token::Colon | Token::LineContinuation | Token::Comment
-                )
-            ) {
-                self.pos += 1;
-            }
+            self.skip_statement_separators();
 
             match self.peek() {
                 None => break,
