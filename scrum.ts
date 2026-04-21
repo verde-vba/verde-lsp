@@ -123,7 +123,54 @@ const scrum: ScrumDashboard = {
     },
   ],
 
-  sprint: null,
+  sprint: {
+    number: 54,
+    pbi_id: "PBI-49",
+    goal: "textDocument/prepareCallHierarchy + callHierarchy/incomingCalls + outgoingCalls — find_all_word_occurrences + proc_ranges を活用したテキストベース call hierarchy",
+    status: "planning",
+    subtasks: [
+      {
+        test: "prepare_call_hierarchy_returns_item_for_sub: Sub 上でカーソルを置くと CallHierarchyItem が返る",
+        implementation: "src/call_hierarchy.rs に prepare_call_hierarchy() pure function 新規作成",
+        type: "structural",
+        status: "pending",
+        commits: [],
+        notes: [],
+      },
+      {
+        test: "incoming_calls_returns_callers: incomingCalls が宣言行を除いた呼び出し元を返す",
+        implementation: "find_all_word_occurrences で全出現を取得、宣言 span を除外し proc_ranges で囲む手続きを特定",
+        type: "behavioral",
+        status: "pending",
+        commits: [],
+        notes: [],
+      },
+      {
+        test: "incoming_calls_cross_file: 別ファイルからの呼び出し元も incomingCalls が返す",
+        implementation: "host.all_file_sources() でクロスファイル反復",
+        type: "behavioral",
+        status: "pending",
+        commits: [],
+        notes: [],
+      },
+      {
+        test: "outgoing_calls_returns_callees: outgoingCalls が手続き本体内の呼び出し先手続き名を返す",
+        implementation: "proc_ranges で body span 取得 → 全既知手続き名を body テキスト内でスキャン",
+        type: "behavioral",
+        status: "pending",
+        commits: [],
+        notes: [],
+      },
+      {
+        test: "server_capabilities_declares_call_hierarchy_provider: capabilities に call_hierarchy_provider が含まれる",
+        implementation: "server.rs に capability 宣言 + 3 handler 配線",
+        type: "behavioral",
+        status: "pending",
+        commits: [],
+        notes: [],
+      },
+    ],
+  },
 
   definition_of_done: {
     checks: [
