@@ -163,6 +163,23 @@ const scrum: ScrumDashboard = {
 
   retrospectives: [
     {
+      sprint: 52,
+      improvements: [
+        {
+          action: "Probe-first アプローチ: ci.yml を読む前に実装コストを見積もらず、まずコードを確認したことで (A) が already-done と即判明 — 「実装前に現状確認」を次 PBI でも踏襲する",
+          timing: "sprint",
+          status: "completed",
+          outcome: "Follow-up (A) 実装ゼロ達成 / Follow-up (B) XS で完結 / 合計コスト最小",
+        },
+        {
+          action: ".cargo/config.toml の test-threads 設定は CI と local の両方で効く — 今後 >60s 警告が再発した場合は thread 数を 1 に絞って直列化デバッグする選択肢も持つ",
+          timing: "product",
+          status: "completed",
+          outcome: "165 tests green, >60s 警告なし",
+        },
+      ],
+    },
+    {
       sprint: 51,
       improvements: [
         {
