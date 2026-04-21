@@ -92,7 +92,46 @@ const scrum: ScrumDashboard = {
     },
   ],
 
-  sprint: null,
+  sprint: {
+    number: 53,
+    pbi_id: "PBI-48",
+    goal: "textDocument/inlayHint — Dim 変数・定数の型を inline 表示 (Symbol.type_name 再利用、Variant fallback あり)",
+    status: "planning",
+    subtasks: [
+      {
+        test: "inlay_hint_shows_dim_variable_type: Dim x As String → ':  String' ヒントが x の末尾位置に返る",
+        implementation: "src/inlay_hint.rs に inlay_hints() pure function 新規作成",
+        type: "structural",
+        status: "pending",
+        commits: [],
+        notes: [],
+      },
+      {
+        test: "inlay_hint_shows_variant_for_untyped_dim: Dim x → ': Variant' ヒントが返る",
+        implementation: "type_name が None の場合 'Variant' を fallback として返す",
+        type: "behavioral",
+        status: "pending",
+        commits: [],
+        notes: [],
+      },
+      {
+        test: "inlay_hint_shows_const_type: Const PI As Double → ': Double' ヒントが返る",
+        implementation: "SymbolKind::Constant も対象に含む",
+        type: "behavioral",
+        status: "pending",
+        commits: [],
+        notes: [],
+      },
+      {
+        test: "server_capabilities_declares_inlay_hint_provider: server_capabilities() に inlayHintProvider が含まれる",
+        implementation: "server.rs の server_capabilities() + inlay_hint() handler 配線",
+        type: "behavioral",
+        status: "pending",
+        commits: [],
+        notes: [],
+      },
+    ],
+  },
 
   definition_of_done: {
     checks: [
