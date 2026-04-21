@@ -59,6 +59,37 @@ const scrum: ScrumDashboard = {
       ],
       status: "done",
     },
+    {
+      id: "PBI-48",
+      story: {
+        role: "VBA開発者",
+        capability: "textDocument/inlayHint で Dim 宣言変数・定数の型を inline 表示する",
+        benefit: "型宣言を読まずにカーソル近くで型を把握でき、コードの可読性が上がる",
+      },
+      acceptance_criteria: [
+        {
+          criterion: "Dim x As String の変数 x の名前末尾に ': String' ヒントが返る",
+          verification: "inlay_hint_shows_dim_variable_type テストが green",
+        },
+        {
+          criterion: "型宣言なし (Dim x) の変数には ': Variant' ヒントが返る",
+          verification: "inlay_hint_shows_variant_for_untyped_dim テストが green",
+        },
+        {
+          criterion: "Const PI As Double = 3.14 の定数 PI に ': Double' ヒントが返る",
+          verification: "inlay_hint_shows_const_type テストが green",
+        },
+        {
+          criterion: "inlayHintProvider が server capabilities に宣言される",
+          verification: "server_capabilities_declares_inlay_hint_provider テストが green",
+        },
+        {
+          criterion: "cargo clippy -D warnings 0 件 / cargo fmt pass",
+          verification: "just clippy && just fmt",
+        },
+      ],
+      status: "ready",
+    },
   ],
 
   sprint: null,
