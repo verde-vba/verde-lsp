@@ -90,6 +90,37 @@ const scrum: ScrumDashboard = {
       ],
       status: "done",
     },
+    {
+      id: "PBI-49",
+      story: {
+        role: "VBA開発者",
+        capability: "textDocument/prepareCallHierarchy + callHierarchy/incomingCalls + outgoingCalls で関数呼び出しツリーをナビゲートする",
+        benefit: "呼び出し元・呼び出し先を視覚的に辿れ、大規模 VBA モジュールのリファクタが容易になる",
+      },
+      acceptance_criteria: [
+        {
+          criterion: "Sub/Function/Property 上でカーソルを置いたとき prepareCallHierarchy が CallHierarchyItem を返す",
+          verification: "prepare_call_hierarchy_returns_item_for_sub テストが green",
+        },
+        {
+          criterion: "incomingCalls が呼び出し元手続きを返す (宣言行は除外)",
+          verification: "incoming_calls_returns_callers テストが green",
+        },
+        {
+          criterion: "outgoingCalls が手続き本体内で呼び出している手続き名を返す",
+          verification: "outgoing_calls_returns_callees テストが green",
+        },
+        {
+          criterion: "クロスファイルの呼び出し元を incomingCalls が返す",
+          verification: "incoming_calls_cross_file テストが green",
+        },
+        {
+          criterion: "call_hierarchy_provider が server capabilities に宣言される",
+          verification: "server_capabilities_declares_call_hierarchy_provider テストが green",
+        },
+      ],
+      status: "ready",
+    },
   ],
 
   sprint: null,
