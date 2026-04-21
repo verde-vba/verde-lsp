@@ -61,7 +61,38 @@ const scrum: ScrumDashboard = {
     },
   ],
 
-  sprint: null,
+  sprint: {
+    number: 52,
+    pbi_id: "PBI-47",
+    goal: "cargo test 並列実行スレッド数チューニング + Follow-up (A) クローズ — .cargo/config.toml に test-threads 設定を追加し >60s 警告を抑止",
+    status: "planning",
+    subtasks: [
+      {
+        test: ".cargo/config.toml に [test] test-threads = 4 が設定されること",
+        implementation: ".cargo/config.toml 新規作成 or 更新",
+        type: "structural",
+        status: "pending",
+        commits: [],
+        notes: [],
+      },
+      {
+        test: "just test が warning なしで完走すること (手動検証)",
+        implementation: "cargo test --all 実行確認",
+        type: "behavioral",
+        status: "pending",
+        commits: [],
+        notes: [],
+      },
+      {
+        test: "plan.md Follow-up (A) が完了マーク済みであること",
+        implementation: "plan.md Follow-up セクション更新",
+        type: "structural",
+        status: "pending",
+        commits: [],
+        notes: [],
+      },
+    ],
+  },
 
   definition_of_done: {
     checks: [
