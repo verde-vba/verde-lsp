@@ -88,7 +88,7 @@ const scrum: ScrumDashboard = {
           verification: "just clippy && just fmt",
         },
       ],
-      status: "ready",
+      status: "done",
     },
   ],
 
@@ -96,7 +96,7 @@ const scrum: ScrumDashboard = {
     number: 53,
     pbi_id: "PBI-48",
     goal: "textDocument/inlayHint — Dim 変数・定数の型を inline 表示 (Symbol.type_name 再利用、Variant fallback あり)",
-    status: "review",
+    status: "done",
     subtasks: [
       {
         test: "inlay_hint_shows_dim_variable_type: Dim x As String → ':  String' ヒントが x の末尾位置に返る",
@@ -142,6 +142,13 @@ const scrum: ScrumDashboard = {
   },
 
   completed: [
+    {
+      number: 53,
+      pbi_id: "PBI-48",
+      goal: "textDocument/inlayHint — Dim 変数・定数の型を inline 表示 (Symbol.type_name 再利用、Variant fallback あり)",
+      status: "done",
+      subtasks: [],
+    },
     {
       number: 52,
       pbi_id: "PBI-47",
