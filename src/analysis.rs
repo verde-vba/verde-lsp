@@ -172,6 +172,31 @@ impl AnalysisHost {
         result
     }
 
+    /// Call hierarchy: prepare — returns the item at cursor if it is a procedure.
+    pub fn prepare_call_hierarchy(
+        &self,
+        uri: &Url,
+        position: Position,
+    ) -> Option<Vec<tower_lsp::lsp_types::CallHierarchyItem>> {
+        crate::call_hierarchy::prepare_call_hierarchy(self, uri, position)
+    }
+
+    /// Call hierarchy: incoming — callers of the given item across all files.
+    pub fn incoming_calls(
+        &self,
+        item: &tower_lsp::lsp_types::CallHierarchyItem,
+    ) -> Vec<tower_lsp::lsp_types::CallHierarchyIncomingCall> {
+        crate::call_hierarchy::incoming_calls(self, item)
+    }
+
+    /// Call hierarchy: outgoing — callees invoked inside the given item's body.
+    pub fn outgoing_calls(
+        &self,
+        item: &tower_lsp::lsp_types::CallHierarchyItem,
+    ) -> Vec<tower_lsp::lsp_types::CallHierarchyOutgoingCall> {
+        crate::call_hierarchy::outgoing_calls(self, item)
+    }
+
     /// Return inlay hints (variable/constant type annotations) for the given file.
     /// `range` is accepted for API compatibility but currently ignored — all symbols
     /// in the file are returned regardless of position.

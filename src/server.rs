@@ -72,6 +72,7 @@ fn server_capabilities() -> ServerCapabilities {
         document_symbol_provider: Some(OneOf::Left(true)),
         document_formatting_provider: Some(OneOf::Left(true)),
         inlay_hint_provider: Some(OneOf::Left(true)),
+        call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
         ..Default::default()
     }
 }
@@ -298,6 +299,33 @@ impl LanguageServer for VbaLanguageServer {
         let hints = self.analysis.inlay_hints(uri, Some(params.range));
         Ok(Some(hints))
     }
+
+    async fn prepare_call_hierarchy(
+        &self,
+        params: CallHierarchyPrepareParams,
+    ) -> Result<Option<Vec<CallHierarchyItem>>> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+        Ok(self.analysis.prepare_call_hierarchy(uri, position))
+    }
+
+    async fn incoming_calls(
+        &self,
+        params: CallHierarchyIncomingCallsParams,
+    ) -> Result<Option<Vec<CallHierarchyIncomingCall>>> {
+        let item = &params.item;
+        let calls = self.analysis.incoming_calls(item);
+        Ok(if calls.is_empty() { None } else { Some(calls) })
+    }
+
+    async fn outgoing_calls(
+        &self,
+        params: CallHierarchyOutgoingCallsParams,
+    ) -> Result<Option<Vec<CallHierarchyOutgoingCall>>> {
+        let item = &params.item;
+        let calls = self.analysis.outgoing_calls(item);
+        Ok(if calls.is_empty() { None } else { Some(calls) })
+    }
 }
 
 #[cfg(test)]
@@ -319,6 +347,15 @@ mod tests {
         assert!(
             caps.inlay_hint_provider.is_some(),
             "inlayHintProvider must be declared in server capabilities"
+        );
+    }
+
+    #[test]
+    fn server_capabilities_declares_call_hierarchy_provider() {
+        let caps = server_capabilities();
+        assert!(
+            caps.call_hierarchy_provider.is_some(),
+            "callHierarchyProvider must be declared in server capabilities"
         );
     }
 }
