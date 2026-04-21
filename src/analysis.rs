@@ -172,6 +172,17 @@ impl AnalysisHost {
         result
     }
 
+    /// Return inlay hints (variable/constant type annotations) for the given file.
+    /// `range` is accepted for API compatibility but currently ignored — all symbols
+    /// in the file are returned regardless of position.
+    pub fn inlay_hints(&self, uri: &Url, _range: Option<Range>) -> Vec<InlayHint> {
+        if let Some(file) = self.files.get(uri) {
+            crate::inlay_hint::inlay_hints(&file.source, &file.symbols)
+        } else {
+            Vec::new()
+        }
+    }
+
     /// Find the first Public module-level symbol matching `name` (case-insensitive)
     /// across all files except `current_uri`. Returns the source URI and symbol.
     pub fn find_public_symbol_in_other_files(

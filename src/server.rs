@@ -71,6 +71,7 @@ fn server_capabilities() -> ServerCapabilities {
         document_highlight_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
         document_formatting_provider: Some(OneOf::Left(true)),
+        inlay_hint_provider: Some(OneOf::Left(true)),
         ..Default::default()
     }
 }
@@ -291,6 +292,12 @@ impl LanguageServer for VbaLanguageServer {
             formatted,
         )]))
     }
+
+    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
+        let uri = &params.text_document.uri;
+        let hints = self.analysis.inlay_hints(uri, Some(params.range));
+        Ok(Some(hints))
+    }
 }
 
 #[cfg(test)]
@@ -304,5 +311,14 @@ mod tests {
         // (PBI-31 Sprint N+33).
         let caps = server_capabilities();
         assert_eq!(caps.position_encoding, Some(PositionEncodingKind::UTF16));
+    }
+
+    #[test]
+    fn server_capabilities_declares_inlay_hint_provider() {
+        let caps = server_capabilities();
+        assert!(
+            caps.inlay_hint_provider.is_some(),
+            "inlayHintProvider must be declared in server capabilities"
+        );
     }
 }
