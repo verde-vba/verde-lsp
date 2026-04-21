@@ -127,7 +127,7 @@ const scrum: ScrumDashboard = {
     number: 54,
     pbi_id: "PBI-49",
     goal: "textDocument/prepareCallHierarchy + callHierarchy/incomingCalls + outgoingCalls — find_all_word_occurrences + proc_ranges を活用したテキストベース call hierarchy",
-    status: "review",
+    status: "done",
     subtasks: [
       {
         test: "prepare_call_hierarchy_returns_item_for_sub: Sub 上でカーソルを置くと CallHierarchyItem が返る",
@@ -181,6 +181,13 @@ const scrum: ScrumDashboard = {
   },
 
   completed: [
+    {
+      number: 54,
+      pbi_id: "PBI-49",
+      goal: "textDocument/prepareCallHierarchy + callHierarchy/incomingCalls + outgoingCalls — find_all_word_occurrences + proc_ranges を活用したテキストベース call hierarchy",
+      status: "done",
+      subtasks: [],
+    },
     {
       number: 53,
       pbi_id: "PBI-48",
