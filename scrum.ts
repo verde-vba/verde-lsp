@@ -65,13 +65,13 @@ const scrum: ScrumDashboard = {
     number: 52,
     pbi_id: "PBI-47",
     goal: "cargo test 並列実行スレッド数チューニング + Follow-up (A) クローズ — .cargo/config.toml に test-threads 設定を追加し >60s 警告を抑止",
-    status: "planning",
+    status: "in_progress",
     subtasks: [
       {
         test: ".cargo/config.toml に [test] test-threads = 4 が設定されること",
         implementation: ".cargo/config.toml 新規作成 or 更新",
         type: "structural",
-        status: "pending",
+        status: "completed",
         commits: [],
         notes: [],
       },
