@@ -92,46 +92,7 @@ const scrum: ScrumDashboard = {
     },
   ],
 
-  sprint: {
-    number: 53,
-    pbi_id: "PBI-48",
-    goal: "textDocument/inlayHint — Dim 変数・定数の型を inline 表示 (Symbol.type_name 再利用、Variant fallback あり)",
-    status: "done",
-    subtasks: [
-      {
-        test: "inlay_hint_shows_dim_variable_type: Dim x As String → ':  String' ヒントが x の末尾位置に返る",
-        implementation: "src/inlay_hint.rs に inlay_hints() pure function 新規作成",
-        type: "structural",
-        status: "completed",
-        commits: [],
-        notes: [],
-      },
-      {
-        test: "inlay_hint_shows_variant_for_untyped_dim: Dim x → ': Variant' ヒントが返る",
-        implementation: "type_name が None の場合 'Variant' を fallback として返す",
-        type: "behavioral",
-        status: "completed",
-        commits: [],
-        notes: [],
-      },
-      {
-        test: "inlay_hint_shows_const_type: Const PI As Double → ': Double' ヒントが返る",
-        implementation: "SymbolKind::Constant も対象に含む",
-        type: "behavioral",
-        status: "completed",
-        commits: [],
-        notes: [],
-      },
-      {
-        test: "server_capabilities_declares_inlay_hint_provider: server_capabilities() に inlayHintProvider が含まれる",
-        implementation: "server.rs の server_capabilities() + inlay_hint() handler 配線",
-        type: "behavioral",
-        status: "completed",
-        commits: [],
-        notes: [],
-      },
-    ],
-  },
+  sprint: null,
 
   definition_of_done: {
     checks: [
@@ -208,6 +169,23 @@ const scrum: ScrumDashboard = {
   ],
 
   retrospectives: [
+    {
+      sprint: 53,
+      improvements: [
+        {
+          action: "Symbol.type_name の既存格納を Probe で確認してから実装着手 — 新機能追加前に SymbolTable の既存フィールドを確認する習慣が実装コストを正確に見積もる鍵",
+          timing: "sprint",
+          status: "completed",
+          outcome: "新規ファイル 1 本 + server.rs 配線のみで PBI-48 を S で完結 (165 → 170 green)",
+        },
+        {
+          action: "offset_to_position (UTF-16 対応済み) を inlay_hint.rs で再利用 — LSP 座標変換は既存ユーティリティを探してから実装すること",
+          timing: "product",
+          status: "completed",
+          outcome: "encode_utf16().count() の重複実装を回避、UTF-16 座標精度を保証",
+        },
+      ],
+    },
     {
       sprint: 52,
       improvements: [
