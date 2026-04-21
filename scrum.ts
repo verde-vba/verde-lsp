@@ -40,6 +40,25 @@ const scrum: ScrumDashboard = {
       ],
       status: "done",
     },
+    {
+      id: "PBI-47",
+      story: {
+        role: "VBA開発者",
+        capability: "cargo test の並列実行スレッド数を制限し、>60s タイムアウト警告を抑止する",
+        benefit: "CI フィードバックの信頼性が上がる",
+      },
+      acceptance_criteria: [
+        {
+          criterion: ".cargo/config.toml に test.test-threads 設定が追加される",
+          verification: "just test が >60s 警告なしで完走",
+        },
+        {
+          criterion: "ci.yml の Ubuntu/Windows 両 runner で cargo test --all が pass",
+          verification: "GitHub Actions CI green",
+        },
+      ],
+      status: "ready",
+    },
   ],
 
   sprint: null,
@@ -125,6 +144,12 @@ const scrum: ScrumDashboard = {
           timing: "sprint",
           status: "completed",
           outcome: "format_indent_public_sub_open_token テストで検証済み",
+        },
+        {
+          action: "Follow-up (A): E2E stdio テストを Windows CI matrix に追加する後続タスク — ci.yml の os: [ubuntu-latest, windows-latest] + cargo test --all が既に設定済み、tests/e2e_stdio.rs の stdio_lifecycle_completes_gracefully は Sprint N+44 で追加済みであり達成済みと確認",
+          timing: "sprint",
+          status: "completed",
+          outcome: "実装変更不要。CI matrix と E2E テストは既に整合していることを Probe で確認済み (2026-04-21)",
         },
       ],
     },
