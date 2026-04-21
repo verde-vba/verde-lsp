@@ -123,54 +123,7 @@ const scrum: ScrumDashboard = {
     },
   ],
 
-  sprint: {
-    number: 54,
-    pbi_id: "PBI-49",
-    goal: "textDocument/prepareCallHierarchy + callHierarchy/incomingCalls + outgoingCalls — find_all_word_occurrences + proc_ranges を活用したテキストベース call hierarchy",
-    status: "done",
-    subtasks: [
-      {
-        test: "prepare_call_hierarchy_returns_item_for_sub: Sub 上でカーソルを置くと CallHierarchyItem が返る",
-        implementation: "src/call_hierarchy.rs に prepare_call_hierarchy() pure function 新規作成",
-        type: "structural",
-        status: "completed",
-        commits: [],
-        notes: [],
-      },
-      {
-        test: "incoming_calls_returns_callers: incomingCalls が宣言行を除いた呼び出し元を返す",
-        implementation: "find_all_word_occurrences で全出現を取得、宣言 span を除外し proc_ranges で囲む手続きを特定",
-        type: "behavioral",
-        status: "completed",
-        commits: [],
-        notes: [],
-      },
-      {
-        test: "incoming_calls_cross_file: 別ファイルからの呼び出し元も incomingCalls が返す",
-        implementation: "host.all_file_sources() でクロスファイル反復",
-        type: "behavioral",
-        status: "completed",
-        commits: [],
-        notes: [],
-      },
-      {
-        test: "outgoing_calls_returns_callees: outgoingCalls が手続き本体内の呼び出し先手続き名を返す",
-        implementation: "proc_ranges で body span 取得 → 全既知手続き名を body テキスト内でスキャン",
-        type: "behavioral",
-        status: "completed",
-        commits: [],
-        notes: [],
-      },
-      {
-        test: "server_capabilities_declares_call_hierarchy_provider: capabilities に call_hierarchy_provider が含まれる",
-        implementation: "server.rs に capability 宣言 + 3 handler 配線",
-        type: "behavioral",
-        status: "completed",
-        commits: [],
-        notes: [],
-      },
-    ],
-  },
+  sprint: null,
 
   definition_of_done: {
     checks: [
@@ -255,6 +208,23 @@ const scrum: ScrumDashboard = {
 
   retrospectives: [
     {
+      sprint: 54,
+      improvements: [
+        {
+          action: "proc_ranges (body span) + find_all_word_occurrences + decl_spans 除外の 3 要素が call hierarchy の incoming/outgoing 両方を支えた — 新 LSP 機能追加前に proc_ranges の活用可否を確認するパターンを定着させる",
+          timing: "sprint",
+          status: "completed",
+          outcome: "prepare + incomingCalls (cross-file) + outgoingCalls を src/call_hierarchy.rs 1 ファイルで S サイズ完結 (170 → 176 green)",
+        },
+        {
+          action: "テキストベーススキャンは型名 (Dim x As Foo) を誤って呼び出しとして含む可能性がある — 精度改善が必要な場合は AST ベースの call-site 検出 PBI を将来追加する",
+          timing: "product",
+          status: "active",
+          outcome: null,
+        },
+      ],
+    },
+    {
       sprint: 53,
       improvements: [
         {
@@ -321,22 +291,10 @@ const scrum: ScrumDashboard = {
       sprint: 50,
       improvements: [
         {
-          action: "apply_formatting の pure function 先行 → LSP handler 配線の Tidy First 順序を Sprint β (N+51) でも維持する",
+          action: "[compact] PBI-46 α/β 完了: pure function 先行 → handler 配線の Tidy First 順序、ElseIf/Else/Case depth 例外をテストで先行文書化、UTF-16 座標計算は handler 側に委譲",
           timing: "sprint",
           status: "completed",
-          outcome: "Sprint N+51 で calculate_line_indents pure helper 先行 → apply_formatting 配線の順序で実現",
-        },
-        {
-          action: "indent 正規化 (β) では ElseIf/Else/Case の depth 例外処理を先にテストで文書化し、実装前に仕様を確定する",
-          timing: "sprint",
-          status: "completed",
-          outcome: "Sprint N+51 で format_indent_else_if_aligned_with_if + format_indent_select_case テストで文書化達成",
-        },
-        {
-          action: "document_end_position の UTF-16 encode_utf16().count() パターンを indent 正規化後も維持 (文字列リテラル内 Unicode 対応)",
-          timing: "sprint",
-          status: "completed",
-          outcome: "Sprint N+51: indent 正規化は行頭ホワイトスペースのみ置換 — UTF-16 座標計算は LSP handler 側 (変更なし) が担当",
+          outcome: "Sprint N+51 で全パターン達成確認済み",
         },
       ],
     },
