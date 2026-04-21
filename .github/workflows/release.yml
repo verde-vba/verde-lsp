@@ -26,13 +26,17 @@ jobs:
             artifact: target/release/verde-lsp
             asset: verde-lsp-macos
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release
       - name: Rename artifact
         shell: bash
         run: cp "${{ matrix.artifact }}" "${{ matrix.asset }}"
-      - uses: softprops/action-gh-release@v2
+      - name: Extract latest CHANGELOG section
+        shell: bash
+        run: awk '/^## \[/{c++} c==1{print} c==2{exit}' CHANGELOG.md > RELEASE_NOTES.md
+      - uses: softprops/action-gh-release@v3
         with:
           files: ${{ matrix.asset }}
+          body_path: RELEASE_NOTES.md
