@@ -21,6 +21,7 @@ const scrum: ScrumDashboard = {
     { id: "PBI-47", story: { role: "VBA開発者", capability: "cargo test-threads チューニング + CI Follow-up クローズ", benefit: "CI 信頼性向上" }, acceptance_criteria: [], status: "done" },
     { id: "PBI-48", story: { role: "VBA開発者", capability: "textDocument/inlayHint — Dim 変数・定数の型 inline 表示", benefit: "型把握容易化" }, acceptance_criteria: [], status: "done" },
     { id: "PBI-49", story: { role: "VBA開発者", capability: "prepareCallHierarchy + incomingCalls + outgoingCalls", benefit: "呼び出しツリーナビゲーション" }, acceptance_criteria: [], status: "done" },
+    { id: "PBI-50", story: { role: "VBA開発者", capability: "AST ベースの call-site 検出 — Dim/As/New の型参照を呼び出しと誤検出しない精度改善", benefit: "call hierarchy が意図通りの呼び出しツリーを返す" }, acceptance_criteria: [], status: "draft" },
   ],
 
   sprint: null,
@@ -119,8 +120,8 @@ const scrum: ScrumDashboard = {
         {
           action: "テキストベーススキャンは型名 (Dim x As Foo) を誤って呼び出しとして含む可能性がある — 精度改善が必要な場合は AST ベースの call-site 検出 PBI を将来追加する",
           timing: "product",
-          status: "active",
-          outcome: null,
+          status: "completed",
+          outcome: "PBI-50 (draft) として product_backlog に登録 — v0.2 refinement 候補",
         },
       ],
     },
