@@ -159,6 +159,175 @@ pub const BUILTIN_FUNCTIONS: &[&str] = &[
     "Year",
 ];
 
+pub struct BuiltinSignature {
+    pub name: &'static str,
+    /// (param_name, param_type, is_optional)
+    pub params: &'static [(&'static str, &'static str, bool)],
+    pub return_type: Option<&'static str>,
+}
+
+pub const BUILTIN_SIGNATURES: &[BuiltinSignature] = &[
+    BuiltinSignature {
+        name: "MsgBox",
+        params: &[
+            ("Prompt", "String", false),
+            ("Buttons", "VbMsgBoxStyle", true),
+            ("Title", "String", true),
+            ("HelpFile", "String", true),
+            ("Context", "Long", true),
+        ],
+        return_type: Some("VbMsgBoxResult"),
+    },
+    BuiltinSignature {
+        name: "InputBox",
+        params: &[
+            ("Prompt", "String", false),
+            ("Title", "String", true),
+            ("Default", "String", true),
+            ("XPos", "Long", true),
+            ("YPos", "Long", true),
+        ],
+        return_type: Some("String"),
+    },
+    BuiltinSignature {
+        name: "InStr",
+        params: &[
+            ("Start", "Long", true),
+            ("String1", "String", false),
+            ("String2", "String", false),
+            ("Compare", "VbCompareMethod", true),
+        ],
+        return_type: Some("Long"),
+    },
+    BuiltinSignature {
+        name: "InStrRev",
+        params: &[
+            ("StringCheck", "String", false),
+            ("StringMatch", "String", false),
+            ("Start", "Long", true),
+            ("Compare", "VbCompareMethod", true),
+        ],
+        return_type: Some("Long"),
+    },
+    BuiltinSignature {
+        name: "Left",
+        params: &[("String", "String", false), ("Length", "Long", false)],
+        return_type: Some("String"),
+    },
+    BuiltinSignature {
+        name: "Right",
+        params: &[("String", "String", false), ("Length", "Long", false)],
+        return_type: Some("String"),
+    },
+    BuiltinSignature {
+        name: "Mid",
+        params: &[
+            ("String", "String", false),
+            ("Start", "Long", false),
+            ("Length", "Long", true),
+        ],
+        return_type: Some("String"),
+    },
+    BuiltinSignature {
+        name: "Len",
+        params: &[("Expression", "Variant", false)],
+        return_type: Some("Long"),
+    },
+    BuiltinSignature {
+        name: "Format",
+        params: &[
+            ("Expression", "Variant", false),
+            ("Format", "String", true),
+        ],
+        return_type: Some("String"),
+    },
+    BuiltinSignature {
+        name: "Replace",
+        params: &[
+            ("Expression", "String", false),
+            ("Find", "String", false),
+            ("Replace", "String", false),
+            ("Start", "Long", true),
+            ("Count", "Long", true),
+            ("Compare", "VbCompareMethod", true),
+        ],
+        return_type: Some("String"),
+    },
+    BuiltinSignature {
+        name: "Split",
+        params: &[
+            ("Expression", "String", false),
+            ("Delimiter", "String", true),
+            ("Limit", "Long", true),
+            ("Compare", "VbCompareMethod", true),
+        ],
+        return_type: Some("String()"),
+    },
+    BuiltinSignature {
+        name: "Join",
+        params: &[
+            ("SourceArray", "Variant", false),
+            ("Delimiter", "String", true),
+        ],
+        return_type: Some("String"),
+    },
+    BuiltinSignature {
+        name: "UBound",
+        params: &[
+            ("Array", "Variant", false),
+            ("Dimension", "Long", true),
+        ],
+        return_type: Some("Long"),
+    },
+    BuiltinSignature {
+        name: "LBound",
+        params: &[
+            ("Array", "Variant", false),
+            ("Dimension", "Long", true),
+        ],
+        return_type: Some("Long"),
+    },
+    BuiltinSignature {
+        name: "CStr",
+        params: &[("Expression", "Variant", false)],
+        return_type: Some("String"),
+    },
+    BuiltinSignature {
+        name: "CInt",
+        params: &[("Expression", "Variant", false)],
+        return_type: Some("Integer"),
+    },
+    BuiltinSignature {
+        name: "CLng",
+        params: &[("Expression", "Variant", false)],
+        return_type: Some("Long"),
+    },
+    BuiltinSignature {
+        name: "CDbl",
+        params: &[("Expression", "Variant", false)],
+        return_type: Some("Double"),
+    },
+    BuiltinSignature {
+        name: "IIf",
+        params: &[
+            ("Expression", "Boolean", false),
+            ("TruePart", "Variant", false),
+            ("FalsePart", "Variant", false),
+        ],
+        return_type: Some("Variant"),
+    },
+    BuiltinSignature {
+        name: "IsNull",
+        params: &[("Expression", "Variant", false)],
+        return_type: Some("Boolean"),
+    },
+    BuiltinSignature {
+        name: "IsEmpty",
+        params: &[("Expression", "Variant", false)],
+        return_type: Some("Boolean"),
+    },
+];
+
 pub const BUILTIN_TYPES: &[&str] = &[
     "Boolean", "Byte", "Integer", "Long", "LongLong", "LongPtr", "Single", "Double", "Currency",
     "Date", "String", "Variant", "Object",

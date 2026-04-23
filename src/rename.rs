@@ -11,6 +11,17 @@ pub fn rename(
     position: Position,
     new_name: &str,
 ) -> Option<WorkspaceEdit> {
+    // Reject renaming to VBA keywords or builtin type names
+    if crate::vba_builtins::KEYWORDS
+        .iter()
+        .any(|kw| kw.eq_ignore_ascii_case(new_name))
+        || crate::vba_builtins::BUILTIN_TYPES
+            .iter()
+            .any(|t| t.eq_ignore_ascii_case(new_name))
+    {
+        return None;
+    }
+
     // Determine the word at cursor, decide cross-file scope, and compute an
     // optional intra-file proc constraint for scope-aware local-variable rename.
     let (word, cross_file, proc_constraint) = host.with_source(uri, |symbols, source| {
@@ -108,5 +119,48 @@ pub fn rename(
             changes: Some(changes),
             ..Default::default()
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::analysis::AnalysisHost;
+
+    fn setup_host(source: &str) -> (AnalysisHost, Url) {
+        let host = AnalysisHost::new();
+        let uri = Url::parse("file:///test.bas").unwrap();
+        let parse_result = crate::parser::parse(source);
+        host.update(uri.clone(), source.to_string(), parse_result);
+        (host, uri)
+    }
+
+    #[test]
+    fn rename_to_keyword_is_rejected() {
+        let (host, uri) = setup_host("Sub Foo()\n    Dim x As Long\n    x = 1\nEnd Sub\n");
+        let result = rename(&host, &uri, Position::new(1, 8), "Sub");
+        assert!(result.is_none(), "renaming to keyword 'Sub' should be rejected");
+    }
+
+    #[test]
+    fn rename_to_builtin_type_is_rejected() {
+        let (host, uri) = setup_host("Sub Foo()\n    Dim x As Long\n    x = 1\nEnd Sub\n");
+        let result = rename(&host, &uri, Position::new(1, 8), "Long");
+        assert!(result.is_none(), "renaming to builtin type should be rejected");
+    }
+
+    #[test]
+    fn rename_to_keyword_case_insensitive() {
+        let (host, uri) = setup_host("Sub Foo()\n    Dim x As Long\n    x = 1\nEnd Sub\n");
+        assert!(rename(&host, &uri, Position::new(1, 8), "sub").is_none());
+        assert!(rename(&host, &uri, Position::new(1, 8), "DIM").is_none());
+        assert!(rename(&host, &uri, Position::new(1, 8), "long").is_none());
+    }
+
+    #[test]
+    fn rename_to_valid_name_is_allowed() {
+        let (host, uri) = setup_host("Sub Foo()\n    Dim x As Long\n    x = 1\nEnd Sub\n");
+        let result = rename(&host, &uri, Position::new(1, 8), "y");
+        assert!(result.is_some(), "renaming to 'y' should be allowed");
     }
 }

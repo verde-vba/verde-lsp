@@ -208,6 +208,40 @@ impl AnalysisHost {
         }
     }
 
+    /// Return Public, module-level symbols from the file whose module name
+    /// (filename stem) matches `module_name` (case-insensitive). Excludes
+    /// `current_uri` itself. Used for `Module1.Foo` dot-access completion.
+    pub fn public_symbols_from_module(
+        &self,
+        current_uri: &Url,
+        module_name: &str,
+    ) -> Vec<symbols::Symbol> {
+        for entry in self.files.iter() {
+            if entry.key() == current_uri {
+                continue;
+            }
+            let stem = entry
+                .key()
+                .path_segments()
+                .and_then(|mut s| s.next_back())
+                .and_then(|f| f.split('.').next())
+                .unwrap_or("");
+            if stem.eq_ignore_ascii_case(module_name) {
+                return entry
+                    .symbols
+                    .symbols
+                    .iter()
+                    .filter(|s| {
+                        s.visibility == crate::parser::ast::Visibility::Public
+                            && s.proc_scope.is_none()
+                    })
+                    .cloned()
+                    .collect();
+            }
+        }
+        Vec::new()
+    }
+
     /// Find the first Public module-level symbol matching `name` (case-insensitive)
     /// across all files except `current_uri`. Returns the source URI and symbol.
     pub fn find_public_symbol_in_other_files(

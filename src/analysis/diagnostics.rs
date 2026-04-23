@@ -1,3 +1,4 @@
+use smol_str::SmolStr;
 use tower_lsp::lsp_types::*;
 
 use super::resolve::text_range_to_lsp_range;
@@ -36,6 +37,8 @@ pub fn compute(
             cross_module_names,
         ));
     }
+
+    diagnostics.extend(check_unused_variables(&parse_result.ast, source));
 
     diagnostics
 }
@@ -283,5 +286,138 @@ fn scan_expression_tokens(
             ),
             ..Default::default()
         });
+    }
+}
+
+/// Walk every procedure in the AST and emit a WARNING for each local variable
+/// that is declared (via `Dim`/`Static`/`Const`) but never referenced in any
+/// non-declaration statement within that procedure. Variables whose name starts
+/// with `_` are excluded (convention for intentionally unused bindings).
+fn check_unused_variables(ast: &Ast, source: &str) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+
+    for &node_id in &ast.root {
+        let proc = match &ast.nodes[node_id] {
+            AstNode::Procedure(p) => p,
+            _ => continue,
+        };
+
+        // Collect locally declared variable names and their spans.
+        let mut locals: Vec<(SmolStr, TextRange)> = Vec::new();
+        for &stmt_id in &proc.body {
+            if let AstNode::Statement(StatementNode::LocalDeclaration(decl)) =
+                &ast.nodes[stmt_id]
+            {
+                for (name, _, name_span) in &decl.names {
+                    // Skip variables with _ prefix.
+                    if name.starts_with('_') {
+                        continue;
+                    }
+                    locals.push((name.clone(), *name_span));
+                }
+            }
+        }
+
+        if locals.is_empty() {
+            continue;
+        }
+
+        // Collect all identifier texts from non-declaration body statements.
+        let mut used_idents: std::collections::HashSet<SmolStr> =
+            std::collections::HashSet::new();
+        for &stmt_id in &proc.body {
+            let stmt = match &ast.nodes[stmt_id] {
+                AstNode::Statement(s) => s,
+                _ => continue,
+            };
+            let tokens: &[crate::parser::lexer::SpannedToken] = match stmt {
+                StatementNode::LocalDeclaration(_) => continue,
+                StatementNode::Expression(n) => &n.tokens,
+                StatementNode::If(n) => &n.tokens,
+                StatementNode::For(n) => &n.tokens,
+                StatementNode::With(n) => &n.tokens,
+                StatementNode::Select(n) => &n.tokens,
+                StatementNode::Call(n) => &n.tokens,
+                StatementNode::Set(n) => &n.tokens,
+                StatementNode::While(n) => &n.tokens,
+                StatementNode::Do(n) => &n.tokens,
+                StatementNode::Redim(n) => &n.tokens,
+                StatementNode::Exit(n) => &n.tokens,
+                StatementNode::GoTo(n) => &n.tokens,
+                StatementNode::OnError(n) => &n.tokens,
+            };
+            for spanned in tokens {
+                if spanned.token == Token::Identifier {
+                    used_idents.insert(spanned.text.clone());
+                }
+            }
+        }
+
+        // Emit diagnostics for declared-but-unused locals.
+        for (name, span) in &locals {
+            let is_used = used_idents
+                .iter()
+                .any(|ident| ident.eq_ignore_ascii_case(name.as_str()));
+            if !is_used {
+                diagnostics.push(Diagnostic {
+                    range: text_range_to_lsp_range(source, *span),
+                    severity: Some(DiagnosticSeverity::WARNING),
+                    source: Some("verde-lsp".to_string()),
+                    message: format!("Variable '{}' is declared but never used", name),
+                    ..Default::default()
+                });
+            }
+        }
+    }
+
+    diagnostics
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unused_variable_warning() {
+        let source = "Sub Foo()\n    Dim x As Long\nEnd Sub\n";
+        let result = crate::parser::parse(source);
+        let symbols = crate::analysis::symbols::build_symbol_table(&result.ast);
+        let diags = compute(
+            &result,
+            &symbols,
+            source,
+            &std::collections::HashSet::new(),
+        );
+        assert!(diags
+            .iter()
+            .any(|d| d.message.contains("x") && d.message.contains("never used")));
+    }
+
+    #[test]
+    fn used_variable_no_warning() {
+        let source = "Sub Foo()\n    Dim x As Long\n    x = 1\nEnd Sub\n";
+        let result = crate::parser::parse(source);
+        let symbols = crate::analysis::symbols::build_symbol_table(&result.ast);
+        let diags = compute(
+            &result,
+            &symbols,
+            source,
+            &std::collections::HashSet::new(),
+        );
+        assert!(!diags.iter().any(|d| d.message.contains("never used")));
+    }
+
+    #[test]
+    fn underscore_prefix_variable_excluded() {
+        let source = "Sub Foo()\n    Dim _unused As Long\nEnd Sub\n";
+        let result = crate::parser::parse(source);
+        let symbols = crate::analysis::symbols::build_symbol_table(&result.ast);
+        let diags = compute(
+            &result,
+            &symbols,
+            source,
+            &std::collections::HashSet::new(),
+        );
+        assert!(!diags.iter().any(|d| d.message.contains("_unused")));
     }
 }

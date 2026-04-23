@@ -12,6 +12,8 @@ pub struct Ast {
     /// Whether the module begins with `Option Explicit`; when true,
     /// undeclared variable usages produce diagnostics.
     pub option_explicit: bool,
+    /// Interface names declared via `Implements IFoo` at module level.
+    pub implements: Vec<SmolStr>,
 }
 
 impl Default for Ast {
@@ -20,6 +22,7 @@ impl Default for Ast {
             nodes: Arena::new(),
             root: Vec::new(),
             option_explicit: false,
+            implements: Vec::new(),
         }
     }
 }

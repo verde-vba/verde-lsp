@@ -29,6 +29,10 @@ pub fn signature_help(host: &AnalysisHost, uri: &Url, position: Position) -> Opt
             // Cross-module fallback.
             let (_, sym) = host.find_public_symbol_in_other_files(uri, &func_name)?;
             build_signature_info(sym.name.as_str(), &sym.detail)
+        })
+        .or_else(|| {
+            // Builtin function fallback.
+            build_builtin_signature_info(&func_name)
         })?;
 
     let param_count = sig.parameters.as_ref().map_or(0, |p| p.len());
@@ -85,7 +89,18 @@ fn find_call_context(source: &str, cursor_offset: usize) -> Option<(String, usiz
                 }
             }
             b',' if depth == 0 => comma_count += 1,
-            b'\n' | b'\r' => return None,
+            b'\n' | b'\r' => {
+                // Check if this newline is preceded by `_` (line continuation).
+                // There may be spaces/tabs between `_` and the newline.
+                let mut j = i;
+                while j > 0 && matches!(bytes[j - 1], b' ' | b'\t' | b'\r') {
+                    j -= 1;
+                }
+                if j > 0 && bytes[j - 1] == b'_' {
+                    continue;
+                }
+                return None;
+            }
             _ => {}
         }
     }
@@ -140,6 +155,60 @@ fn build_signature_info(name: &str, detail: &SymbolDetail) -> Option<SignatureIn
     })
 }
 
+fn build_builtin_signature_info(name: &str) -> Option<SignatureInformation> {
+    use crate::vba_builtins::BUILTIN_SIGNATURES;
+
+    let sig = BUILTIN_SIGNATURES
+        .iter()
+        .find(|s| s.name.eq_ignore_ascii_case(name))?;
+
+    let param_strs: Vec<String> = sig
+        .params
+        .iter()
+        .map(|(pname, ptype, optional)| {
+            if *optional {
+                format!("[{pname} As {ptype}]")
+            } else {
+                format!("{pname} As {ptype}")
+            }
+        })
+        .collect();
+    let param_list = param_strs.join(", ");
+
+    let ret = sig
+        .return_type
+        .map(|t| format!(" As {t}"))
+        .unwrap_or_default();
+    let label = format!("Function {}({param_list}){ret}", sig.name);
+
+    let parameters: Vec<ParameterInformation> = sig
+        .params
+        .iter()
+        .map(|(pname, ptype, optional)| {
+            let label_str = if *optional {
+                format!("[{pname} As {ptype}]")
+            } else {
+                format!("{pname} As {ptype}")
+            };
+            ParameterInformation {
+                label: ParameterLabel::Simple(label_str),
+                documentation: None,
+            }
+        })
+        .collect();
+
+    Some(SignatureInformation {
+        label,
+        documentation: None,
+        parameters: if parameters.is_empty() {
+            None
+        } else {
+            Some(parameters)
+        },
+        active_parameter: None,
+    })
+}
+
 fn format_params(params: &[ParameterInfo]) -> String {
     params
         .iter()
@@ -152,5 +221,99 @@ fn format_param(p: &ParameterInfo) -> String {
     match &p.type_name {
         Some(t) => format!("{} As {t}", p.name),
         None => p.name.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn find_call_context_single_line() {
+        let source = "Foo(a, b)";
+        let result = find_call_context(source, 7);
+        assert_eq!(result, Some(("Foo".to_string(), 1)));
+    }
+
+    #[test]
+    fn find_call_context_returns_none_outside_parens() {
+        let source = "x = 1";
+        let result = find_call_context(source, 3);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn find_call_context_with_line_continuation() {
+        let source = "Foo(a, _\n    b, _\n    c)";
+        let c_pos = source.find('c').unwrap();
+        let result = find_call_context(source, c_pos);
+        assert!(result.is_some(), "expected call context with line continuation");
+        let (name, param) = result.unwrap();
+        assert_eq!(name, "Foo");
+        assert_eq!(param, 2);
+    }
+
+    #[test]
+    fn find_call_context_line_continuation_second_line() {
+        let source = "Foo(a, _\n    b, _\n    c)";
+        let b_pos = source.find('b').unwrap();
+        let result = find_call_context(source, b_pos);
+        assert!(result.is_some(), "expected call context on second line");
+        let (name, param) = result.unwrap();
+        assert_eq!(name, "Foo");
+        assert_eq!(param, 1);
+    }
+
+    #[test]
+    fn find_call_context_no_continuation_returns_none() {
+        let source = "Foo(a,\n    b)";
+        let b_pos = source.find('b').unwrap();
+        let result = find_call_context(source, b_pos);
+        assert!(result.is_none(), "newline without _ should return None");
+    }
+
+    #[test]
+    fn find_call_context_continuation_with_spaces_before_underscore() {
+        let source = "Foo(a,   _\n    b)";
+        let b_pos = source.find('b').unwrap();
+        let result = find_call_context(source, b_pos);
+        assert!(result.is_some(), "expected call context with spaces before _");
+        let (name, param) = result.unwrap();
+        assert_eq!(name, "Foo");
+        assert_eq!(param, 1);
+    }
+
+    // ── PLAN-09: Builtin signature help ───────────────────────────────
+
+    #[test]
+    fn builtin_msgbox_signature() {
+        let sig = build_builtin_signature_info("MsgBox");
+        assert!(sig.is_some(), "expected MsgBox signature");
+        let sig = sig.unwrap();
+        assert!(sig.label.contains("MsgBox"), "label should contain MsgBox");
+        assert!(sig.parameters.is_some());
+        let params = sig.parameters.unwrap();
+        assert_eq!(params.len(), 5, "MsgBox has 5 parameters");
+    }
+
+    #[test]
+    fn builtin_instr_signature() {
+        let sig = build_builtin_signature_info("InStr");
+        assert!(sig.is_some(), "expected InStr signature");
+        let sig = sig.unwrap();
+        let params = sig.parameters.unwrap();
+        assert_eq!(params.len(), 4, "InStr has 4 parameters");
+    }
+
+    #[test]
+    fn builtin_case_insensitive() {
+        assert!(build_builtin_signature_info("msgbox").is_some());
+        assert!(build_builtin_signature_info("MSGBOX").is_some());
+        assert!(build_builtin_signature_info("iif").is_some());
+    }
+
+    #[test]
+    fn unknown_builtin_returns_none() {
+        assert!(build_builtin_signature_info("NonExistentFunc").is_none());
     }
 }

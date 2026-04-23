@@ -1,13 +1,91 @@
 use tower_lsp::lsp_types::*;
 
 use crate::analysis::resolve;
+use crate::analysis::symbols::{SymbolDetail, SymbolKind, SymbolTable};
 use crate::analysis::AnalysisHost;
+
+/// Resolve the member on the right side of a dot access for goto-definition.
+fn goto_def_dot_member(
+    symbols: &SymbolTable,
+    source: &str,
+    uri: &Url,
+    position: Position,
+) -> Option<GotoDefinitionResponse> {
+    let offset = resolve::position_to_offset(source, position)?;
+    let (var_name, _member_partial) = resolve::parse_dot_access_at(source, offset)?;
+    let member_name = resolve::find_word_at_position(source, position)?;
+
+    // `Me.member` — jump to definition of module-level symbol.
+    if var_name.eq_ignore_ascii_case("Me") {
+        let sym = symbols
+            .symbols
+            .iter()
+            .find(|s| s.proc_scope.is_none() && s.name.eq_ignore_ascii_case(&member_name))?;
+        let range = resolve::text_range_to_lsp_range(source, sym.span);
+        return Some(GotoDefinitionResponse::Scalar(Location::new(
+            uri.clone(),
+            range,
+        )));
+    }
+
+    // Resolve the variable's type.
+    let cursor_proc = symbols
+        .proc_ranges
+        .iter()
+        .find(|(_, r)| offset >= r.start as usize && offset <= r.end as usize)
+        .map(|(name, _)| name.clone());
+
+    let type_name = cursor_proc
+        .as_ref()
+        .and_then(|proc_name| {
+            symbols.symbols.iter().find(|s| {
+                s.name.eq_ignore_ascii_case(&var_name)
+                    && matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter)
+                    && s.proc_scope
+                        .as_ref()
+                        .is_some_and(|p| p.eq_ignore_ascii_case(proc_name))
+            })
+        })
+        .or_else(|| {
+            symbols.symbols.iter().find(|s| {
+                s.name.eq_ignore_ascii_case(&var_name)
+                    && matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter)
+                    && s.proc_scope.is_none()
+            })
+        })
+        .and_then(|s| s.type_name.clone())?;
+
+    // UDT member → jump to the member declaration inside the TypeDef.
+    let sym = symbols.symbols.iter().find(|s| {
+        matches!(s.kind, SymbolKind::UdtMember)
+            && s.name.eq_ignore_ascii_case(&member_name)
+            && match &s.detail {
+                SymbolDetail::UdtMember { parent_type, .. } => {
+                    parent_type.eq_ignore_ascii_case(&type_name)
+                }
+                _ => false,
+            }
+    })?;
+
+    let range = resolve::text_range_to_lsp_range(source, sym.span);
+    Some(GotoDefinitionResponse::Scalar(Location::new(
+        uri.clone(),
+        range,
+    )))
+}
 
 pub fn goto_definition(
     host: &AnalysisHost,
     uri: &Url,
     position: Position,
 ) -> Option<GotoDefinitionResponse> {
+    // Dot-access: if cursor is on the right side of `obj.Member`, jump to the member's def.
+    if let Some(response) = host.with_source(uri, |symbols, source| {
+        goto_def_dot_member(symbols, source, uri, position)
+    }).flatten() {
+        return Some(response);
+    }
+
     // Try current file first, preferring symbols scoped to the cursor's procedure.
     let result = host.with_source(uri, |symbols, source| {
         let word = resolve::find_word_at_position(source, position)?;

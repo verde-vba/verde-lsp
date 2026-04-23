@@ -114,6 +114,11 @@ impl<'a> Parser<'a> {
                 Token::Dim | Token::Const => self.parse_variable(Visibility::Private),
                 Token::Type => self.parse_type_def(Visibility::Public),
                 Token::Enum => self.parse_enum_def(Visibility::Public),
+                Token::Declare => self.skip_to_end_of_line(),
+                Token::Implements => self.parse_implements(),
+                Token::HashIf | Token::HashElseIf | Token::HashElse | Token::HashEndIf | Token::HashConst => {
+                    self.skip_to_end_of_line();
+                }
                 _ => {
                     self.pos += 1;
                 }
@@ -128,6 +133,28 @@ impl<'a> Parser<'a> {
                 self.ast.option_explicit = true;
                 self.pos += 1;
             }
+        }
+    }
+
+    fn parse_implements(&mut self) {
+        self.pos += 1; // skip "Implements"
+        if let Some(tok) = self.peek() {
+            if tok.token == Token::Identifier {
+                self.ast.implements.push(tok.text.clone());
+                self.pos += 1;
+            }
+        }
+        // Skip to end of line for any remaining tokens
+        self.skip_to_end_of_line();
+    }
+
+    fn skip_to_end_of_line(&mut self) {
+        while self.pos < self.tokens.len() {
+            if self.tokens[self.pos].token == Token::Newline {
+                self.pos += 1;
+                break;
+            }
+            self.pos += 1;
         }
     }
 
@@ -158,6 +185,7 @@ impl<'a> Parser<'a> {
                 Token::Type => self.parse_type_def(visibility),
                 Token::Enum => self.parse_enum_def(visibility),
                 Token::Const => self.parse_variable(visibility),
+                Token::Declare => self.skip_to_end_of_line(),
                 _ => self.parse_variable(visibility),
             }
         }
@@ -1548,5 +1576,103 @@ mod tests {
             "expected Private m_count to be parsed despite .cls header"
         );
         assert_eq!(var.unwrap().name.as_str(), "m_count");
+    }
+
+    // ── Declare statement handling (PLAN-01) ──────────────────────────────
+
+    #[test]
+    fn parse_declare_statement_does_not_panic() {
+        let result = parse("Declare Sub Foo Lib \"kernel32\" ()\n");
+        assert!(result.errors.is_empty(), "expected no parse errors");
+    }
+
+    #[test]
+    fn parse_declare_does_not_corrupt_subsequent_sub() {
+        let source = "Declare Sub Foo Lib \"kernel32\" ()\nSub Bar()\nEnd Sub\n";
+        let result = parse(source);
+        let proc = result.ast.nodes.iter().find_map(|(_, n)| match n {
+            AstNode::Procedure(p) => Some(p),
+            _ => None,
+        });
+        assert!(
+            proc.is_some(),
+            "expected Sub Bar to be parsed after Declare line"
+        );
+        assert_eq!(proc.unwrap().name.as_str(), "Bar");
+    }
+
+    #[test]
+    fn parse_private_declare_is_skipped() {
+        let source = "Private Declare Sub Foo Lib \"kernel32\" ()\nSub Bar()\nEnd Sub\n";
+        let result = parse(source);
+        let proc = result.ast.nodes.iter().find_map(|(_, n)| match n {
+            AstNode::Procedure(p) => Some(p),
+            _ => None,
+        });
+        assert!(
+            proc.is_some(),
+            "expected Sub Bar to be parsed after Private Declare"
+        );
+        assert_eq!(proc.unwrap().name.as_str(), "Bar");
+    }
+
+    #[test]
+    fn parse_declare_function_is_skipped() {
+        let source =
+            "Declare Function GetTickCount Lib \"kernel32\" () As Long\nSub Main()\nEnd Sub\n";
+        let result = parse(source);
+        let proc = result.ast.nodes.iter().find_map(|(_, n)| match n {
+            AstNode::Procedure(p) => Some(p),
+            _ => None,
+        });
+        assert!(proc.is_some(), "expected Sub Main after Declare Function");
+        assert_eq!(proc.unwrap().name.as_str(), "Main");
+    }
+
+    // ── PLAN-17: Implements parse ────────────────────────────────────
+
+    #[test]
+    fn parse_implements_statement() {
+        let result = parse("Implements IFoo\nSub Bar()\nEnd Sub\n");
+        assert_eq!(result.ast.implements.len(), 1);
+        assert_eq!(result.ast.implements[0].as_str(), "IFoo");
+    }
+
+    #[test]
+    fn parse_multiple_implements() {
+        let result = parse("Implements IFoo\nImplements IBar\nSub Test()\nEnd Sub\n");
+        assert_eq!(result.ast.implements.len(), 2);
+    }
+
+    // ── PLAN-18: Conditional compilation ─────────────────────────────
+
+    #[test]
+    fn parse_conditional_compilation_does_not_panic() {
+        let source = "#If VBA7 Then\nDeclare PtrSafe Sub Foo Lib \"kernel32\" ()\n#Else\nDeclare Sub Foo Lib \"kernel32\" ()\n#End If\nSub Main()\nEnd Sub\n";
+        let result = parse(source);
+        let proc = result.ast.nodes.iter().find_map(|(_, n)| match n {
+            AstNode::Procedure(p) => Some(p),
+            _ => None,
+        });
+        assert!(proc.is_some(), "expected Sub Main after conditional compilation block");
+        assert_eq!(proc.unwrap().name.as_str(), "Main");
+    }
+
+    #[test]
+    fn parse_hash_const_is_skipped() {
+        let source = "#Const DEBUG = 1\nSub Foo()\nEnd Sub\n";
+        let result = parse(source);
+        let proc = result.ast.nodes.iter().find_map(|(_, n)| match n {
+            AstNode::Procedure(p) => Some(p),
+            _ => None,
+        });
+        assert!(proc.is_some(), "expected Sub Foo after #Const");
+    }
+
+    #[test]
+    fn parse_hash_elseif_is_handled() {
+        let source = "#If VBA7 Then\n#ElseIf Win64 Then\n#Else\n#End If\nSub Foo()\nEnd Sub\n";
+        let result = parse(source);
+        assert!(result.errors.is_empty());
     }
 }

@@ -155,6 +155,118 @@ pub fn parse_dot_access_at(source: &str, cursor_offset: usize) -> Option<(SmolSt
     Some((var_name, member_partial))
 }
 
+/// Detect a leading dot (`.member` without preceding identifier).
+/// Returns the member partial text if cursor is at a leading-dot position.
+pub fn parse_leading_dot_at(source: &str, cursor_offset: usize) -> Option<SmolStr> {
+    let bytes = source.as_bytes();
+    let mut member_start = cursor_offset;
+    while member_start > 0 && is_ident_char(bytes[member_start - 1]) {
+        member_start -= 1;
+    }
+    if member_start == 0 || bytes[member_start - 1] != b'.' {
+        return None;
+    }
+    let dot_pos = member_start - 1;
+    // Check there's no identifier immediately before the dot
+    if dot_pos > 0 && is_ident_char(bytes[dot_pos - 1]) {
+        return None;
+    }
+    Some(SmolStr::new(&source[member_start..cursor_offset]))
+}
+
+/// Parse a dot chain backwards from cursor. For `a.b.c.|` returns
+/// `(["a", "b", "c"], member_partial)`. For single `a.|` returns `(["a"], "")`.
+pub fn parse_dot_chain_at(source: &str, cursor_offset: usize) -> Option<(Vec<SmolStr>, SmolStr)> {
+    let bytes = source.as_bytes();
+
+    let mut member_start = cursor_offset;
+    while member_start > 0 && is_ident_char(bytes[member_start - 1]) {
+        member_start -= 1;
+    }
+    if member_start == 0 || bytes[member_start - 1] != b'.' {
+        return None;
+    }
+    let member_partial = SmolStr::new(&source[member_start..cursor_offset]);
+
+    let mut chain = Vec::new();
+    let mut pos = member_start - 1; // at the dot
+
+    loop {
+        let ident_end = pos;
+        let mut ident_start = ident_end;
+        while ident_start > 0 && is_ident_char(bytes[ident_start - 1]) {
+            ident_start -= 1;
+        }
+        if ident_start == ident_end {
+            break; // leading dot or no identifier
+        }
+        chain.push(SmolStr::new(&source[ident_start..ident_end]));
+        if ident_start > 0 && bytes[ident_start - 1] == b'.' {
+            pos = ident_start - 1;
+        } else {
+            break;
+        }
+    }
+
+    chain.reverse();
+    if chain.is_empty() {
+        return None;
+    }
+    Some((chain, member_partial))
+}
+
+/// Detect `FuncName().` pattern. Returns the function name and member partial
+/// if cursor is after a closing paren followed by a dot.
+pub fn parse_func_call_dot_at(source: &str, cursor_offset: usize) -> Option<(SmolStr, SmolStr)> {
+    let bytes = source.as_bytes();
+
+    let mut member_start = cursor_offset;
+    while member_start > 0 && is_ident_char(bytes[member_start - 1]) {
+        member_start -= 1;
+    }
+    if member_start == 0 || bytes[member_start - 1] != b'.' {
+        return None;
+    }
+    let member_partial = SmolStr::new(&source[member_start..cursor_offset]);
+    let dot_pos = member_start - 1;
+
+    // Check if `)` is before the dot
+    if dot_pos == 0 || bytes[dot_pos - 1] != b')' {
+        return None;
+    }
+
+    // Find matching `(`
+    let mut paren_pos = dot_pos - 1; // at `)`
+    let mut depth = 1i32;
+    while paren_pos > 0 && depth > 0 {
+        paren_pos -= 1;
+        match bytes[paren_pos] {
+            b')' => depth += 1,
+            b'(' => depth -= 1,
+            _ => {}
+        }
+    }
+    if depth != 0 {
+        return None;
+    }
+
+    // paren_pos is at `(`. Read identifier before it.
+    let mut func_end = paren_pos;
+    while func_end > 0 && bytes[func_end - 1] == b' ' {
+        func_end -= 1;
+    }
+    let mut func_start = func_end;
+    while func_start > 0 && is_ident_char(bytes[func_start - 1]) {
+        func_start -= 1;
+    }
+    if func_start == func_end {
+        return None;
+    }
+
+    let func_name = SmolStr::new(&source[func_start..func_end]);
+    Some((func_name, member_partial))
+}
+
 fn is_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }

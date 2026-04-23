@@ -8,6 +8,31 @@ pub struct SymbolTable {
     pub option_explicit: bool,
     /// Full byte-range of each procedure in source order, used for cursor-scope detection.
     pub proc_ranges: Vec<(SmolStr, TextRange)>,
+    /// Block ranges (With/If/For/Select/Do/While) within procedures,
+    /// computed by scanning the token stream for open/close pairs.
+    pub block_ranges: Vec<BlockRange>,
+    /// Interface names declared via `Implements IFoo` at module level.
+    pub implements: Vec<SmolStr>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BlockKind {
+    With,
+    If,
+    For,
+    Select,
+    Do,
+    While,
+}
+
+#[derive(Debug, Clone)]
+pub struct BlockRange {
+    pub kind: BlockKind,
+    pub start: u32,
+    pub end: u32,
+    pub proc_name: SmolStr,
+    /// Extra data: for With blocks, the target expression (e.g. variable name).
+    pub data: Option<SmolStr>,
 }
 
 #[derive(Debug, Clone)]
@@ -79,6 +104,7 @@ pub struct ParameterInfo {
 pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
     let mut symbols = Vec::new();
     let mut proc_ranges = Vec::new();
+    let mut block_ranges = Vec::new();
 
     for &node_id in &ast.root {
         match &ast.nodes[node_id] {
@@ -253,10 +279,126 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
         }
     }
 
+    // Compute block ranges within each procedure's body.
+    for &node_id in &ast.root {
+        if let AstNode::Procedure(proc) = &ast.nodes[node_id] {
+            compute_block_ranges(proc, ast, &mut block_ranges);
+        }
+    }
+
     SymbolTable {
         symbols,
         option_explicit: ast.option_explicit,
         proc_ranges,
+        block_ranges,
+        implements: ast.implements.clone(),
+    }
+}
+
+/// Scan a procedure's body statements to find block open/close pairs
+/// and record their ranges.
+fn compute_block_ranges(proc: &ProcedureNode, ast: &Ast, out: &mut Vec<BlockRange>) {
+    use crate::parser::lexer::Token;
+
+    // Build a flat list of (token, span_start, span_end) from all body statements.
+    struct OpenBlock {
+        kind: BlockKind,
+        start: u32,
+        data: Option<SmolStr>,
+    }
+
+    let mut stack: Vec<OpenBlock> = Vec::new();
+
+    for &stmt_id in &proc.body {
+        let stmt = match &ast.nodes[stmt_id] {
+            AstNode::Statement(s) => s,
+            _ => continue,
+        };
+
+        match stmt {
+            StatementNode::With(w) => {
+                // Extract the With target (first Identifier after With keyword).
+                let data = w
+                    .tokens
+                    .iter()
+                    .find(|t| t.token == Token::Identifier)
+                    .map(|t| t.text.clone());
+                stack.push(OpenBlock {
+                    kind: BlockKind::With,
+                    start: w.span.start,
+                    data,
+                });
+            }
+            StatementNode::If(i) => {
+                stack.push(OpenBlock {
+                    kind: BlockKind::If,
+                    start: i.span.start,
+                    data: None,
+                });
+            }
+            StatementNode::For(f) => {
+                // Extract loop variable (first Identifier after For).
+                let data = f
+                    .tokens
+                    .iter()
+                    .find(|t| t.token == Token::Identifier)
+                    .map(|t| t.text.clone());
+                stack.push(OpenBlock {
+                    kind: BlockKind::For,
+                    start: f.span.start,
+                    data,
+                });
+            }
+            StatementNode::Select(s) => {
+                stack.push(OpenBlock {
+                    kind: BlockKind::Select,
+                    start: s.span.start,
+                    data: None,
+                });
+            }
+            StatementNode::Do(d) => {
+                stack.push(OpenBlock {
+                    kind: BlockKind::Do,
+                    start: d.span.start,
+                    data: None,
+                });
+            }
+            StatementNode::While(wh) => {
+                stack.push(OpenBlock {
+                    kind: BlockKind::While,
+                    start: wh.span.start,
+                    data: None,
+                });
+            }
+            StatementNode::Expression(expr) => {
+                // Check for closing tokens (EndWith, EndIf, Next, EndSelect, Loop, Wend)
+                if let Some(first) = expr.tokens.first() {
+                    let close_kind = match first.token {
+                        Token::EndWith => Some(BlockKind::With),
+                        Token::EndIf => Some(BlockKind::If),
+                        Token::Next => Some(BlockKind::For),
+                        Token::EndSelect => Some(BlockKind::Select),
+                        Token::Loop => Some(BlockKind::Do),
+                        Token::Wend => Some(BlockKind::While),
+                        _ => None,
+                    };
+                    if let Some(kind) = close_kind {
+                        // Pop the matching open block from the stack.
+                        if let Some(pos) = stack.iter().rposition(|b| b.kind == kind) {
+                            let open = stack.remove(pos);
+                            out.push(BlockRange {
+                                kind: open.kind,
+                                start: open.start,
+                                end: expr.span.end,
+                                proc_name: proc.name.clone(),
+                                data: open.data,
+                            });
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -440,5 +582,66 @@ mod tests {
                 ),
             }
         }
+    }
+
+    // ── PLAN-12: Block range tests ────────────────────────────────────
+
+    #[test]
+    fn with_block_range_is_computed() {
+        let source = "Sub A()\n    With rng\n        .Value = 1\n    End With\nEnd Sub\n";
+        let result = parse(source);
+        let symbols = build_symbol_table(&result.ast);
+        assert_eq!(symbols.block_ranges.len(), 1, "expected 1 block range");
+        let br = &symbols.block_ranges[0];
+        assert_eq!(br.kind, BlockKind::With);
+        assert_eq!(br.proc_name.as_str(), "A");
+        assert_eq!(br.data.as_deref(), Some("rng"));
+    }
+
+    #[test]
+    fn nested_blocks_are_computed() {
+        let source = "Sub A()\n    With rng\n        If True Then\n        End If\n    End With\nEnd Sub\n";
+        let result = parse(source);
+        let symbols = build_symbol_table(&result.ast);
+        assert_eq!(
+            symbols.block_ranges.len(),
+            2,
+            "expected 2 block ranges (With + If)"
+        );
+        assert!(symbols.block_ranges.iter().any(|b| b.kind == BlockKind::With));
+        assert!(symbols.block_ranges.iter().any(|b| b.kind == BlockKind::If));
+    }
+
+    #[test]
+    fn for_block_range_captures_loop_variable() {
+        let source = "Sub A()\n    For i = 1 To 10\n    Next i\nEnd Sub\n";
+        let result = parse(source);
+        let symbols = build_symbol_table(&result.ast);
+        assert_eq!(symbols.block_ranges.len(), 1, "expected 1 block range");
+        let br = &symbols.block_ranges[0];
+        assert_eq!(br.kind, BlockKind::For);
+        assert_eq!(br.data.as_deref(), Some("i"));
+    }
+
+    #[test]
+    fn incomplete_block_does_not_panic() {
+        let source = "Sub A()\n    With rng\n        .Value = 1\nEnd Sub\n";
+        let result = parse(source);
+        let symbols = build_symbol_table(&result.ast);
+        // Incomplete With (no End With) — should not panic, just no block range
+        assert!(
+            symbols.block_ranges.is_empty(),
+            "incomplete block should not produce a range"
+        );
+    }
+
+    // ── PLAN-17: Implements in symbol table ──────────────────────────
+
+    #[test]
+    fn implements_registered_in_symbol_table() {
+        let result = parse("Implements IFoo\nSub Bar()\nEnd Sub\n");
+        let symbols = build_symbol_table(&result.ast);
+        assert_eq!(symbols.implements.len(), 1);
+        assert_eq!(symbols.implements[0].as_str(), "IFoo");
     }
 }

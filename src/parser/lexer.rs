@@ -128,6 +128,20 @@ pub enum Token {
     Explicit,
     #[token("Get", ignore(ascii_case))]
     Get,
+    #[token("Declare", ignore(ascii_case))]
+    Declare,
+
+    // Conditional compilation
+    #[token("#If", ignore(ascii_case))]
+    HashIf,
+    #[token("#ElseIf", ignore(ascii_case))]
+    HashElseIf,
+    #[token("#Else", ignore(ascii_case))]
+    HashElse,
+    #[token("#End If", ignore(ascii_case))]
+    HashEndIf,
+    #[token("#Const", ignore(ascii_case))]
+    HashConst,
 
     // Literals
     #[token("True", ignore(ascii_case))]

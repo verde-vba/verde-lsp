@@ -63,6 +63,7 @@ fn server_capabilities() -> ServerCapabilities {
             ..Default::default()
         }),
         definition_provider: Some(OneOf::Left(true)),
+        type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
         rename_provider: Some(OneOf::Left(true)),
         references_provider: Some(OneOf::Left(true)),
         code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
@@ -72,6 +73,14 @@ fn server_capabilities() -> ServerCapabilities {
         document_symbol_provider: Some(OneOf::Left(true)),
         document_formatting_provider: Some(OneOf::Left(true)),
         inlay_hint_provider: Some(OneOf::Left(true)),
+        semantic_tokens_provider: Some(
+            SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions {
+                legend: crate::semantic_tokens::legend(),
+                full: Some(SemanticTokensFullOptions::Bool(true)),
+                range: None,
+                ..Default::default()
+            }),
+        ),
         call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
         ..Default::default()
     }
@@ -198,6 +207,19 @@ impl LanguageServer for VbaLanguageServer {
         ))
     }
 
+    async fn goto_type_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+        Ok(crate::type_definition::goto_type_definition(
+            &self.analysis,
+            uri,
+            position,
+        ))
+    }
+
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
         let uri = &params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
@@ -300,6 +322,14 @@ impl LanguageServer for VbaLanguageServer {
         Ok(Some(hints))
     }
 
+    async fn semantic_tokens_full(
+        &self,
+        params: SemanticTokensParams,
+    ) -> Result<Option<SemanticTokensResult>> {
+        let uri = &params.text_document.uri;
+        Ok(crate::semantic_tokens::semantic_tokens(&self.analysis, uri))
+    }
+
     async fn prepare_call_hierarchy(
         &self,
         params: CallHierarchyPrepareParams,
@@ -347,6 +377,15 @@ mod tests {
         assert!(
             caps.inlay_hint_provider.is_some(),
             "inlayHintProvider must be declared in server capabilities"
+        );
+    }
+
+    #[test]
+    fn server_capabilities_declares_semantic_tokens_provider() {
+        let caps = server_capabilities();
+        assert!(
+            caps.semantic_tokens_provider.is_some(),
+            "semanticTokensProvider must be declared in server capabilities"
         );
     }
 
