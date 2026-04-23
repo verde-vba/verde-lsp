@@ -105,7 +105,10 @@ mod tests {
         let (host, uri) = setup_host(source);
         let ranges = folding_ranges(&host, &uri);
         // Should have Sub range + If range
-        assert!(ranges.len() >= 2, "expected at least 2 folding ranges (Sub + If)");
+        assert!(
+            ranges.len() >= 2,
+            "expected at least 2 folding ranges (Sub + If)"
+        );
     }
 
     #[test]
@@ -113,7 +116,10 @@ mod tests {
         let source = "Sub Foo()\n    For i = 1 To 10\n        x = i\n    Next i\nEnd Sub\n";
         let (host, uri) = setup_host(source);
         let ranges = folding_ranges(&host, &uri);
-        assert!(ranges.len() >= 2, "expected at least 2 folding ranges (Sub + For)");
+        assert!(
+            ranges.len() >= 2,
+            "expected at least 2 folding ranges (Sub + For)"
+        );
     }
 
     #[test]
@@ -121,7 +127,10 @@ mod tests {
         let source = "Sub Foo()\n    With rng\n        .Value = 1\n    End With\nEnd Sub\n";
         let (host, uri) = setup_host(source);
         let ranges = folding_ranges(&host, &uri);
-        assert!(ranges.len() >= 2, "expected at least 2 folding ranges (Sub + With)");
+        assert!(
+            ranges.len() >= 2,
+            "expected at least 2 folding ranges (Sub + With)"
+        );
     }
 
     #[test]

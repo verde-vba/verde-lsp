@@ -29,31 +29,7 @@ fn goto_def_dot_member(
     }
 
     // Resolve the variable's type.
-    let cursor_proc = symbols
-        .proc_ranges
-        .iter()
-        .find(|(_, r)| offset >= r.start as usize && offset <= r.end as usize)
-        .map(|(name, _)| name.clone());
-
-    let type_name = cursor_proc
-        .as_ref()
-        .and_then(|proc_name| {
-            symbols.symbols.iter().find(|s| {
-                s.name.eq_ignore_ascii_case(&var_name)
-                    && matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter)
-                    && s.proc_scope
-                        .as_ref()
-                        .is_some_and(|p| p.eq_ignore_ascii_case(proc_name))
-            })
-        })
-        .or_else(|| {
-            symbols.symbols.iter().find(|s| {
-                s.name.eq_ignore_ascii_case(&var_name)
-                    && matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter)
-                    && s.proc_scope.is_none()
-            })
-        })
-        .and_then(|s| s.type_name.clone())?;
+    let type_name = resolve::resolve_var_type_at(symbols, offset, &var_name)?;
 
     // UDT member → jump to the member declaration inside the TypeDef.
     let sym = symbols.symbols.iter().find(|s| {
@@ -80,9 +56,12 @@ pub fn goto_definition(
     position: Position,
 ) -> Option<GotoDefinitionResponse> {
     // Dot-access: if cursor is on the right side of `obj.Member`, jump to the member's def.
-    if let Some(response) = host.with_source(uri, |symbols, source| {
-        goto_def_dot_member(symbols, source, uri, position)
-    }).flatten() {
+    if let Some(response) = host
+        .with_source(uri, |symbols, source| {
+            goto_def_dot_member(symbols, source, uri, position)
+        })
+        .flatten()
+    {
         return Some(response);
     }
 
@@ -96,22 +75,16 @@ pub fn goto_definition(
         // for local variables and parameters when two procs share a name.
         let sym = {
             let cursor_offset = resolve::position_to_offset(source, position);
-            let containing_proc = cursor_offset.and_then(|off| {
-                symbols
-                    .proc_ranges
-                    .iter()
-                    .find(|(_, r)| off >= r.start as usize && off <= r.end as usize)
-                    .map(|(name, _)| name.clone())
-            });
+            let containing_proc = cursor_offset
+                .and_then(|off| resolve::find_containing_proc(&symbols.proc_ranges, off));
 
-            if let Some(ref proc_name) = containing_proc {
+            if let Some(proc_name) = containing_proc {
                 matches
                     .iter()
                     .find(|s| {
                         s.proc_scope
                             .as_ref()
-                            .map(|p| p.eq_ignore_ascii_case(proc_name))
-                            .unwrap_or(false)
+                            .is_some_and(|p| p.eq_ignore_ascii_case(proc_name))
                     })
                     .copied()
                     .or_else(|| matches.first().copied())

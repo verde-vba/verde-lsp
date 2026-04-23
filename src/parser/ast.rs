@@ -141,6 +141,27 @@ pub enum StatementNode {
     OnError(OnErrorStatementNode),
 }
 
+impl StatementNode {
+    pub fn tokens(&self) -> &[SpannedToken] {
+        match self {
+            StatementNode::LocalDeclaration(_) => &[],
+            StatementNode::Expression(n) => &n.tokens,
+            StatementNode::If(n) => &n.tokens,
+            StatementNode::For(n) => &n.tokens,
+            StatementNode::With(n) => &n.tokens,
+            StatementNode::Select(n) => &n.tokens,
+            StatementNode::Call(n) => &n.tokens,
+            StatementNode::Set(n) => &n.tokens,
+            StatementNode::While(n) => &n.tokens,
+            StatementNode::Do(n) => &n.tokens,
+            StatementNode::Redim(n) => &n.tokens,
+            StatementNode::Exit(n) => &n.tokens,
+            StatementNode::GoTo(n) => &n.tokens,
+            StatementNode::OnError(n) => &n.tokens,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeclKind {
     Dim,

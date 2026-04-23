@@ -247,7 +247,10 @@ mod tests {
         let source = "Foo(a, _\n    b, _\n    c)";
         let c_pos = source.find('c').unwrap();
         let result = find_call_context(source, c_pos);
-        assert!(result.is_some(), "expected call context with line continuation");
+        assert!(
+            result.is_some(),
+            "expected call context with line continuation"
+        );
         let (name, param) = result.unwrap();
         assert_eq!(name, "Foo");
         assert_eq!(param, 2);
@@ -277,7 +280,10 @@ mod tests {
         let source = "Foo(a,   _\n    b)";
         let b_pos = source.find('b').unwrap();
         let result = find_call_context(source, b_pos);
-        assert!(result.is_some(), "expected call context with spaces before _");
+        assert!(
+            result.is_some(),
+            "expected call context with spaces before _"
+        );
         let (name, param) = result.unwrap();
         assert_eq!(name, "Foo");
         assert_eq!(param, 1);

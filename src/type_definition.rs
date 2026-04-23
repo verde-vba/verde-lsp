@@ -87,7 +87,8 @@ mod tests {
 
     #[test]
     fn type_definition_jumps_to_typedef() {
-        let source = "Type MyType\n    x As Long\nEnd Type\nSub Foo()\n    Dim f As MyType\nEnd Sub\n";
+        let source =
+            "Type MyType\n    x As Long\nEnd Type\nSub Foo()\n    Dim f As MyType\nEnd Sub\n";
         let (host, uri) = setup_host(source);
         // Cursor on 'f' at line 4, col 8
         let result = goto_type_definition(&host, &uri, Position::new(4, 8));
@@ -99,7 +100,8 @@ mod tests {
 
     #[test]
     fn type_definition_jumps_to_enum() {
-        let source = "Enum Color\n    Red\n    Green\nEnd Enum\nSub Foo()\n    Dim c As Color\nEnd Sub\n";
+        let source =
+            "Enum Color\n    Red\n    Green\nEnd Enum\nSub Foo()\n    Dim c As Color\nEnd Sub\n";
         let (host, uri) = setup_host(source);
         let result = goto_type_definition(&host, &uri, Position::new(5, 8));
         assert!(result.is_some(), "expected type definition jump for 'c'");

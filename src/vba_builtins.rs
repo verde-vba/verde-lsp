@@ -235,10 +235,7 @@ pub const BUILTIN_SIGNATURES: &[BuiltinSignature] = &[
     },
     BuiltinSignature {
         name: "Format",
-        params: &[
-            ("Expression", "Variant", false),
-            ("Format", "String", true),
-        ],
+        params: &[("Expression", "Variant", false), ("Format", "String", true)],
         return_type: Some("String"),
     },
     BuiltinSignature {
@@ -273,18 +270,12 @@ pub const BUILTIN_SIGNATURES: &[BuiltinSignature] = &[
     },
     BuiltinSignature {
         name: "UBound",
-        params: &[
-            ("Array", "Variant", false),
-            ("Dimension", "Long", true),
-        ],
+        params: &[("Array", "Variant", false), ("Dimension", "Long", true)],
         return_type: Some("Long"),
     },
     BuiltinSignature {
         name: "LBound",
-        params: &[
-            ("Array", "Variant", false),
-            ("Dimension", "Long", true),
-        ],
+        params: &[("Array", "Variant", false), ("Dimension", "Long", true)],
         return_type: Some("Long"),
     },
     BuiltinSignature {

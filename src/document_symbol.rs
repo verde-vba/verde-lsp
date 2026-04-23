@@ -1,4 +1,4 @@
-use tower_lsp::lsp_types::{self, DocumentSymbol, SymbolKind, Url};
+use tower_lsp::lsp_types::{DocumentSymbol, Url};
 
 use crate::analysis::resolve::text_range_to_lsp_range;
 use crate::analysis::symbols;
@@ -43,7 +43,7 @@ fn build_hierarchy(table: &symbols::SymbolTable, source: &str) -> Vec<DocumentSy
         top_level.push(DocumentSymbol {
             name: sym.name.to_string(),
             detail: sym.type_name.as_ref().map(|t| t.to_string()),
-            kind: to_lsp_symbol_kind(&sym.kind),
+            kind: sym.kind.to_lsp_symbol_kind(),
             deprecated: None,
             range: full_range,
             selection_range,
@@ -78,7 +78,7 @@ fn collect_children(
             DocumentSymbol {
                 name: s.name.to_string(),
                 detail: s.type_name.as_ref().map(|t| t.to_string()),
-                kind: to_lsp_symbol_kind(&s.kind),
+                kind: s.kind.to_lsp_symbol_kind(),
                 deprecated: None,
                 range,
                 selection_range: range,
@@ -87,19 +87,4 @@ fn collect_children(
             }
         })
         .collect()
-}
-
-fn to_lsp_symbol_kind(kind: &symbols::SymbolKind) -> SymbolKind {
-    match kind {
-        symbols::SymbolKind::Procedure => lsp_types::SymbolKind::FUNCTION,
-        symbols::SymbolKind::Function => lsp_types::SymbolKind::FUNCTION,
-        symbols::SymbolKind::Property => lsp_types::SymbolKind::PROPERTY,
-        symbols::SymbolKind::Variable => lsp_types::SymbolKind::VARIABLE,
-        symbols::SymbolKind::Constant => lsp_types::SymbolKind::CONSTANT,
-        symbols::SymbolKind::Parameter => lsp_types::SymbolKind::VARIABLE,
-        symbols::SymbolKind::TypeDef => lsp_types::SymbolKind::STRUCT,
-        symbols::SymbolKind::EnumDef => lsp_types::SymbolKind::ENUM,
-        symbols::SymbolKind::EnumMember => lsp_types::SymbolKind::ENUM_MEMBER,
-        symbols::SymbolKind::UdtMember => lsp_types::SymbolKind::FIELD,
-    }
 }

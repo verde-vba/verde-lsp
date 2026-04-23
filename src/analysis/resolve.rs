@@ -4,7 +4,7 @@ use tower_lsp::lsp_types::*;
 use super::symbols::{Symbol, SymbolTable};
 use crate::parser::ast::TextRange;
 
-pub fn find_symbol_at_position<'a>(
+pub(crate) fn find_symbol_at_position<'a>(
     symbols: &'a SymbolTable,
     source: &str,
     position: Position,
@@ -16,7 +16,7 @@ pub fn find_symbol_at_position<'a>(
         .find(|s| offset >= s.span.start as usize && offset <= s.span.end as usize)
 }
 
-pub fn find_symbol_by_name<'a>(symbols: &'a SymbolTable, name: &str) -> Vec<&'a Symbol> {
+pub(crate) fn find_symbol_by_name<'a>(symbols: &'a SymbolTable, name: &str) -> Vec<&'a Symbol> {
     symbols
         .symbols
         .iter()
@@ -27,7 +27,7 @@ pub fn find_symbol_by_name<'a>(symbols: &'a SymbolTable, name: &str) -> Vec<&'a 
 /// Find every byte range in `source` where `word` appears as a standalone
 /// identifier (word-boundary on both sides, case-insensitive). Used by rename
 /// to collect all reference sites in addition to declaration sites.
-pub fn find_all_word_occurrences(source: &str, word: &str) -> Vec<TextRange> {
+pub(crate) fn find_all_word_occurrences(source: &str, word: &str) -> Vec<TextRange> {
     let bytes = source.as_bytes();
     let word_len = word.len();
     let mut result = Vec::new();
@@ -47,7 +47,7 @@ pub fn find_all_word_occurrences(source: &str, word: &str) -> Vec<TextRange> {
     result
 }
 
-pub fn find_word_at_position(source: &str, position: Position) -> Option<SmolStr> {
+pub(crate) fn find_word_at_position(source: &str, position: Position) -> Option<SmolStr> {
     let offset = position_to_offset(source, position)?;
     let bytes = source.as_bytes();
 
@@ -68,13 +68,13 @@ pub fn find_word_at_position(source: &str, position: Position) -> Option<SmolStr
     Some(SmolStr::new(&source[start..end]))
 }
 
-pub fn text_range_to_lsp_range(source: &str, range: TextRange) -> Range {
+pub(crate) fn text_range_to_lsp_range(source: &str, range: TextRange) -> Range {
     let start = offset_to_position(source, range.start as usize);
     let end = offset_to_position(source, range.end as usize);
     Range::new(start, end)
 }
 
-pub fn position_to_offset(source: &str, position: Position) -> Option<usize> {
+pub(crate) fn position_to_offset(source: &str, position: Position) -> Option<usize> {
     let mut line = 0u32;
     let mut col = 0u32;
 
@@ -100,7 +100,7 @@ pub fn position_to_offset(source: &str, position: Position) -> Option<usize> {
     }
 }
 
-pub fn offset_to_position(source: &str, offset: usize) -> Position {
+pub(crate) fn offset_to_position(source: &str, offset: usize) -> Position {
     let mut line = 0u32;
     let mut col = 0u32;
 
@@ -124,7 +124,10 @@ pub fn offset_to_position(source: &str, offset: usize) -> Position {
 /// Returns `(var_name, member_partial)` where `member_partial` is the
 /// identifier text from its start up to the cursor offset (may be empty
 /// directly after the dot, e.g. `f.` with cursor right after the dot).
-pub fn parse_dot_access_at(source: &str, cursor_offset: usize) -> Option<(SmolStr, SmolStr)> {
+pub(crate) fn parse_dot_access_at(
+    source: &str,
+    cursor_offset: usize,
+) -> Option<(SmolStr, SmolStr)> {
     let bytes = source.as_bytes();
 
     // Walk backward from cursor to the start of the current identifier token.
@@ -157,7 +160,7 @@ pub fn parse_dot_access_at(source: &str, cursor_offset: usize) -> Option<(SmolSt
 
 /// Detect a leading dot (`.member` without preceding identifier).
 /// Returns the member partial text if cursor is at a leading-dot position.
-pub fn parse_leading_dot_at(source: &str, cursor_offset: usize) -> Option<SmolStr> {
+pub(crate) fn parse_leading_dot_at(source: &str, cursor_offset: usize) -> Option<SmolStr> {
     let bytes = source.as_bytes();
     let mut member_start = cursor_offset;
     while member_start > 0 && is_ident_char(bytes[member_start - 1]) {
@@ -176,7 +179,10 @@ pub fn parse_leading_dot_at(source: &str, cursor_offset: usize) -> Option<SmolSt
 
 /// Parse a dot chain backwards from cursor. For `a.b.c.|` returns
 /// `(["a", "b", "c"], member_partial)`. For single `a.|` returns `(["a"], "")`.
-pub fn parse_dot_chain_at(source: &str, cursor_offset: usize) -> Option<(Vec<SmolStr>, SmolStr)> {
+pub(crate) fn parse_dot_chain_at(
+    source: &str,
+    cursor_offset: usize,
+) -> Option<(Vec<SmolStr>, SmolStr)> {
     let bytes = source.as_bytes();
 
     let mut member_start = cursor_offset;
@@ -217,7 +223,10 @@ pub fn parse_dot_chain_at(source: &str, cursor_offset: usize) -> Option<(Vec<Smo
 
 /// Detect `FuncName().` pattern. Returns the function name and member partial
 /// if cursor is after a closing paren followed by a dot.
-pub fn parse_func_call_dot_at(source: &str, cursor_offset: usize) -> Option<(SmolStr, SmolStr)> {
+pub(crate) fn parse_func_call_dot_at(
+    source: &str,
+    cursor_offset: usize,
+) -> Option<(SmolStr, SmolStr)> {
     let bytes = source.as_bytes();
 
     let mut member_start = cursor_offset;
@@ -265,6 +274,54 @@ pub fn parse_func_call_dot_at(source: &str, cursor_offset: usize) -> Option<(Smo
 
     let func_name = SmolStr::new(&source[func_start..func_end]);
     Some((func_name, member_partial))
+}
+
+/// Find the procedure name that contains the given byte offset.
+pub(crate) fn find_containing_proc(
+    proc_ranges: &[(SmolStr, TextRange)],
+    offset: usize,
+) -> Option<&SmolStr> {
+    proc_ranges
+        .iter()
+        .find(|(_, r)| offset >= r.start as usize && offset <= r.end as usize)
+        .map(|(name, _)| name)
+}
+
+/// Resolve the type of a variable at a given offset. Checks proc-scoped symbols first,
+/// then module-level symbols.
+pub(crate) fn resolve_var_type_at(
+    symbols: &SymbolTable,
+    offset: usize,
+    var_name: &str,
+) -> Option<SmolStr> {
+    let cursor_proc = find_containing_proc(&symbols.proc_ranges, offset);
+
+    cursor_proc
+        .and_then(|proc_name| {
+            symbols.symbols.iter().find(|s| {
+                s.name.eq_ignore_ascii_case(var_name)
+                    && matches!(
+                        s.kind,
+                        super::symbols::SymbolKind::Variable
+                            | super::symbols::SymbolKind::Parameter
+                    )
+                    && s.proc_scope
+                        .as_ref()
+                        .is_some_and(|p| p.eq_ignore_ascii_case(proc_name))
+            })
+        })
+        .or_else(|| {
+            symbols.symbols.iter().find(|s| {
+                s.name.eq_ignore_ascii_case(var_name)
+                    && matches!(
+                        s.kind,
+                        super::symbols::SymbolKind::Variable
+                            | super::symbols::SymbolKind::Parameter
+                    )
+                    && s.proc_scope.is_none()
+            })
+        })
+        .and_then(|s| s.type_name.clone())
 }
 
 fn is_ident_char(b: u8) -> bool {

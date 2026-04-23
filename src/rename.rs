@@ -139,14 +139,20 @@ mod tests {
     fn rename_to_keyword_is_rejected() {
         let (host, uri) = setup_host("Sub Foo()\n    Dim x As Long\n    x = 1\nEnd Sub\n");
         let result = rename(&host, &uri, Position::new(1, 8), "Sub");
-        assert!(result.is_none(), "renaming to keyword 'Sub' should be rejected");
+        assert!(
+            result.is_none(),
+            "renaming to keyword 'Sub' should be rejected"
+        );
     }
 
     #[test]
     fn rename_to_builtin_type_is_rejected() {
         let (host, uri) = setup_host("Sub Foo()\n    Dim x As Long\n    x = 1\nEnd Sub\n");
         let result = rename(&host, &uri, Position::new(1, 8), "Long");
-        assert!(result.is_none(), "renaming to builtin type should be rejected");
+        assert!(
+            result.is_none(),
+            "renaming to builtin type should be rejected"
+        );
     }
 
     #[test]

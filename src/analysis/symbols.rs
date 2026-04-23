@@ -61,6 +61,23 @@ pub enum SymbolKind {
     UdtMember,
 }
 
+impl SymbolKind {
+    pub fn to_lsp_symbol_kind(&self) -> tower_lsp::lsp_types::SymbolKind {
+        match self {
+            SymbolKind::Procedure => tower_lsp::lsp_types::SymbolKind::FUNCTION,
+            SymbolKind::Function => tower_lsp::lsp_types::SymbolKind::FUNCTION,
+            SymbolKind::Property => tower_lsp::lsp_types::SymbolKind::PROPERTY,
+            SymbolKind::Variable => tower_lsp::lsp_types::SymbolKind::VARIABLE,
+            SymbolKind::Constant => tower_lsp::lsp_types::SymbolKind::CONSTANT,
+            SymbolKind::Parameter => tower_lsp::lsp_types::SymbolKind::VARIABLE,
+            SymbolKind::TypeDef => tower_lsp::lsp_types::SymbolKind::STRUCT,
+            SymbolKind::EnumDef => tower_lsp::lsp_types::SymbolKind::ENUM,
+            SymbolKind::EnumMember => tower_lsp::lsp_types::SymbolKind::ENUM_MEMBER,
+            SymbolKind::UdtMember => tower_lsp::lsp_types::SymbolKind::FIELD,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum SymbolDetail {
     Procedure {
@@ -600,7 +617,8 @@ mod tests {
 
     #[test]
     fn nested_blocks_are_computed() {
-        let source = "Sub A()\n    With rng\n        If True Then\n        End If\n    End With\nEnd Sub\n";
+        let source =
+            "Sub A()\n    With rng\n        If True Then\n        End If\n    End With\nEnd Sub\n";
         let result = parse(source);
         let symbols = build_symbol_table(&result.ast);
         assert_eq!(
@@ -608,7 +626,10 @@ mod tests {
             2,
             "expected 2 block ranges (With + If)"
         );
-        assert!(symbols.block_ranges.iter().any(|b| b.kind == BlockKind::With));
+        assert!(symbols
+            .block_ranges
+            .iter()
+            .any(|b| b.kind == BlockKind::With));
         assert!(symbols.block_ranges.iter().any(|b| b.kind == BlockKind::If));
     }
 

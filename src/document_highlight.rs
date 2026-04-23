@@ -17,12 +17,9 @@ pub fn document_highlight(
         // Check if the word refers to a proc-scoped symbol in the procedure at cursor.
         let proc_scope_range = (|| {
             let offset = position_to_offset(source, position)?;
-            let containing_proc = symbols
-                .proc_ranges
-                .iter()
-                .find(|(_, range)| {
-                    offset >= range.start as usize && offset <= range.end as usize
-                })?;
+            let containing_proc = symbols.proc_ranges.iter().find(|(_, range)| {
+                offset >= range.start as usize && offset <= range.end as usize
+            })?;
             let is_proc_scoped = symbols.symbols.iter().any(|sym| {
                 sym.name.eq_ignore_ascii_case(&word)
                     && sym.proc_scope.as_deref() == Some(containing_proc.0.as_str())
