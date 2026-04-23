@@ -31,7 +31,14 @@ pub struct ParamDef {
     pub optional: bool,
 }
 
-pub fn load_builtin_types() -> Vec<ExcelObjectType> {
+/// Returns a static reference to the builtin Excel object types.
+/// Initialized once on first call via `OnceLock`, avoiding repeated heap allocation.
+pub fn builtin_types() -> &'static [ExcelObjectType] {
+    static TYPES: std::sync::OnceLock<Vec<ExcelObjectType>> = std::sync::OnceLock::new();
+    TYPES.get_or_init(load_builtin_types_inner)
+}
+
+fn load_builtin_types_inner() -> Vec<ExcelObjectType> {
     // MVP: hardcoded core types. Will load from JSON in excel-types/ later.
     vec![
         ExcelObjectType {
@@ -219,19 +226,24 @@ pub fn load_builtin_types() -> Vec<ExcelObjectType> {
 ///
 /// Returns an empty vector if the `Application` type is not present in the
 /// builtin type set (defensive; should not happen in practice).
-pub fn application_globals() -> Vec<String> {
-    let types = load_builtin_types();
-    let Some(app) = types.iter().find(|t| t.name == "Application") else {
-        return Vec::new();
-    };
-    let mut names = Vec::with_capacity(app.properties.len() + app.methods.len());
-    for p in &app.properties {
-        names.push(p.name.to_string());
-    }
-    for m in &app.methods {
-        names.push(m.name.to_string());
-    }
-    names
+/// Returns a static reference to the Application global names.
+/// Initialized once on first call via `OnceLock`.
+pub fn application_globals() -> &'static [SmolStr] {
+    static GLOBALS: std::sync::OnceLock<Vec<SmolStr>> = std::sync::OnceLock::new();
+    GLOBALS.get_or_init(|| {
+        let types = builtin_types();
+        let Some(app) = types.iter().find(|t| t.name == "Application") else {
+            return Vec::new();
+        };
+        let mut names = Vec::with_capacity(app.properties.len() + app.methods.len());
+        for p in &app.properties {
+            names.push(p.name.clone());
+        }
+        for m in &app.methods {
+            names.push(m.name.clone());
+        }
+        names
+    })
 }
 
 fn prop(name: &str, type_name: &str, readonly: bool) -> PropertyDef {

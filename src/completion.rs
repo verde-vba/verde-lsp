@@ -3,7 +3,7 @@ use tower_lsp::lsp_types::*;
 use crate::analysis::resolve::{parse_dot_access_at, position_to_offset};
 use crate::analysis::symbols::{SymbolDetail, SymbolKind, SymbolTable};
 use crate::analysis::AnalysisHost;
-use crate::excel_model::types::load_builtin_types;
+use crate::excel_model::types::builtin_types;
 use crate::vba_builtins;
 
 fn symbol_kind_to_completion_kind(kind: &SymbolKind) -> CompletionItemKind {
@@ -33,10 +33,13 @@ pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<Compl
     }
 
     // Module-name dot-access: `Module1.` → Public symbols from that module
-    if let Some(var_name) = host.with_source(uri, |_, source| {
-        let offset = position_to_offset(source, position)?;
-        parse_dot_access_at(source, offset).map(|(name, _)| name)
-    }).flatten() {
+    if let Some(var_name) = host
+        .with_source(uri, |_, source| {
+            let offset = position_to_offset(source, position)?;
+            parse_dot_access_at(source, offset).map(|(name, _)| name)
+        })
+        .flatten()
+    {
         let module_syms = host.public_symbols_from_module(uri, &var_name);
         if !module_syms.is_empty() {
             return module_syms
@@ -94,7 +97,7 @@ pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<Compl
     // Application implicit globals (e.g. ActiveWorkbook, Range, Cells)
     for name in crate::excel_model::types::application_globals() {
         items.push(CompletionItem {
-            label: name,
+            label: name.to_string(),
             kind: Some(CompletionItemKind::PROPERTY),
             detail: Some("Application".to_string()),
             ..Default::default()
@@ -138,22 +141,13 @@ pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<Compl
         });
     }
 
-    // Workbook names from workbook-context.json
+    // Workbook names from workbook-context.json (single lock acquisition)
+    let (sheets, tables, named_ranges) = host.workbook_context_snapshot();
+    push_named_items(&mut items, sheets, CompletionItemKind::MODULE, "Worksheet");
+    push_named_items(&mut items, tables, CompletionItemKind::STRUCT, "Table");
     push_named_items(
         &mut items,
-        host.workbook_sheets(),
-        CompletionItemKind::MODULE,
-        "Worksheet",
-    );
-    push_named_items(
-        &mut items,
-        host.workbook_tables(),
-        CompletionItemKind::STRUCT,
-        "Table",
-    );
-    push_named_items(
-        &mut items,
-        host.workbook_named_ranges(),
+        named_ranges,
         CompletionItemKind::CONSTANT,
         "Named Range",
     );
@@ -224,34 +218,7 @@ fn complete_dot_access(
     }
 
     // Prefer proc-scoped variable over module-level when cursor is inside a proc.
-    let cursor_proc = symbols
-        .proc_ranges
-        .iter()
-        .find(|(_, r)| offset >= r.start as usize && offset <= r.end as usize)
-        .map(|(name, _)| name.clone());
-
-    let type_name = cursor_proc
-        .as_ref()
-        .and_then(|proc_name| {
-            symbols.symbols.iter().find(|s| {
-                s.name.eq_ignore_ascii_case(&var_name)
-                    && matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter)
-                    && s.proc_scope
-                        .as_ref()
-                        .map(|p| p.eq_ignore_ascii_case(proc_name))
-                        .unwrap_or(false)
-            })
-        })
-        .or_else(|| {
-            symbols.symbols.iter().find(|s| {
-                s.name.eq_ignore_ascii_case(&var_name)
-                    && matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter)
-                    && s.proc_scope.is_none()
-            })
-        })
-        .and_then(|s| s.type_name.clone());
-
-    let type_name = type_name?;
+    let type_name = crate::analysis::resolve::resolve_var_type_at(symbols, offset, &var_name)?;
 
     let members: Vec<CompletionItem> = symbols
         .symbols
@@ -303,7 +270,7 @@ fn complete_dot_access(
     }
 
     // Fallback: look up the type in Excel builtin types (e.g. Range, PivotTable, Chart, Shape).
-    let builtin_types = load_builtin_types();
+    let builtin_types = builtin_types();
     if let Some(excel_type) = builtin_types
         .iter()
         .find(|t| t.name.eq_ignore_ascii_case(&type_name))
@@ -353,10 +320,7 @@ fn push_named_items(
 
 /// Resolve members for a given type name. Returns completion items for UDT members,
 /// Enum members, or Excel builtin type properties/methods.
-fn resolve_type_members(
-    symbols: &SymbolTable,
-    type_name: &str,
-) -> Option<Vec<CompletionItem>> {
+fn resolve_type_members(symbols: &SymbolTable, type_name: &str) -> Option<Vec<CompletionItem>> {
     // UDT members
     let udt_members: Vec<CompletionItem> = symbols
         .symbols
@@ -406,8 +370,8 @@ fn resolve_type_members(
     }
 
     // Excel builtin types
-    let builtin_types = crate::excel_model::types::load_builtin_types();
-    if let Some(excel_type) = builtin_types
+    let btypes = crate::excel_model::types::builtin_types();
+    if let Some(excel_type) = btypes
         .iter()
         .find(|t| t.name.eq_ignore_ascii_case(type_name))
     {
@@ -446,43 +410,14 @@ fn complete_leading_dot(
     let _member_partial = parse_leading_dot_at(source, offset)?;
 
     // Find innermost With block containing cursor
-    let with_block = symbols
-        .block_ranges
-        .iter()
-        .rfind(|b| {
-            b.kind == BlockKind::With
-                && (b.start as usize) <= offset
-                && offset <= (b.end as usize)
-        });
+    let with_block = symbols.block_ranges.iter().rfind(|b| {
+        b.kind == BlockKind::With && (b.start as usize) <= offset && offset <= (b.end as usize)
+    });
 
     let var_name = with_block?.data.as_ref()?;
 
     // Resolve the With target's type using the same logic as complete_dot_access
-    let cursor_proc = symbols
-        .proc_ranges
-        .iter()
-        .find(|(_, r)| offset >= r.start as usize && offset <= r.end as usize)
-        .map(|(name, _)| name.clone());
-
-    let type_name = cursor_proc
-        .as_ref()
-        .and_then(|proc_name| {
-            symbols.symbols.iter().find(|s| {
-                s.name.eq_ignore_ascii_case(var_name)
-                    && matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter)
-                    && s.proc_scope
-                        .as_ref()
-                        .is_some_and(|p| p.eq_ignore_ascii_case(proc_name))
-            })
-        })
-        .or_else(|| {
-            symbols.symbols.iter().find(|s| {
-                s.name.eq_ignore_ascii_case(var_name)
-                    && matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter)
-                    && s.proc_scope.is_none()
-            })
-        })
-        .and_then(|s| s.type_name.clone())?;
+    let type_name = crate::analysis::resolve::resolve_var_type_at(symbols, offset, var_name)?;
 
     // Return members of the resolved type (UDT, Enum, or Excel builtin)
     resolve_type_members(symbols, &type_name)
@@ -536,36 +471,12 @@ fn resolve_chain_dot(
         return None; // Single-segment handled by existing logic
     }
 
-    let cursor_proc = symbols
-        .proc_ranges
-        .iter()
-        .find(|(_, r)| offset >= r.start as usize && offset <= r.end as usize)
-        .map(|(name, _)| name.clone());
-
     // Resolve the first segment to a type
     let first = &chain[0];
-    let mut current_type = cursor_proc
-        .as_ref()
-        .and_then(|proc_name| {
-            symbols.symbols.iter().find(|s| {
-                s.name.eq_ignore_ascii_case(first)
-                    && matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter)
-                    && s.proc_scope
-                        .as_ref()
-                        .is_some_and(|p| p.eq_ignore_ascii_case(proc_name))
-            })
-        })
-        .or_else(|| {
-            symbols.symbols.iter().find(|s| {
-                s.name.eq_ignore_ascii_case(first)
-                    && matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter)
-                    && s.proc_scope.is_none()
-            })
-        })
-        .and_then(|s| s.type_name.clone())?;
+    let mut current_type = crate::analysis::resolve::resolve_var_type_at(symbols, offset, first)?;
 
     // Walk remaining chain segments (except the last, which is what we're completing)
-    let builtin_types = crate::excel_model::types::load_builtin_types();
+    let builtin_types = crate::excel_model::types::builtin_types();
     for segment in &chain[1..] {
         // Check UDT members
         if let Some(member) = symbols.symbols.iter().find(|s| {
@@ -630,7 +541,10 @@ mod tests {
         let (host, uri) = setup_host("Sub Foo()\n    \nEnd Sub\n");
         let items = complete(&host, &uri, Position::new(1, 4));
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"ActiveWorkbook"), "expected ActiveWorkbook");
+        assert!(
+            labels.contains(&"ActiveWorkbook"),
+            "expected ActiveWorkbook"
+        );
         assert!(labels.contains(&"ActiveSheet"), "expected ActiveSheet");
         assert!(labels.contains(&"ActiveCell"), "expected ActiveCell");
     }
@@ -640,7 +554,10 @@ mod tests {
         let (host, uri) = setup_host("Sub Foo()\n    Dim rng As Range\n    rng.\nEnd Sub\n");
         let items = complete(&host, &uri, Position::new(2, 8));
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(!labels.contains(&"ActiveWorkbook"), "globals should not appear in dot access");
+        assert!(
+            !labels.contains(&"ActiveWorkbook"),
+            "globals should not appear in dot access"
+        );
     }
 
     #[test]
@@ -651,8 +568,14 @@ mod tests {
         let items = complete(&host, &uri, Position::new(6, 10));
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         assert!(labels.contains(&"Red"), "expected Red in Color. completion");
-        assert!(labels.contains(&"Green"), "expected Green in Color. completion");
-        assert!(labels.contains(&"Blue"), "expected Blue in Color. completion");
+        assert!(
+            labels.contains(&"Green"),
+            "expected Green in Color. completion"
+        );
+        assert!(
+            labels.contains(&"Blue"),
+            "expected Blue in Color. completion"
+        );
     }
 
     #[test]
@@ -682,8 +605,14 @@ mod tests {
 
         let items = complete(&host, &uri_b, Position::new(1, 14));
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"Foo"), "expected Public Sub Foo from module_a");
-        assert!(!labels.contains(&"Bar"), "Private Sub Bar should not appear");
+        assert!(
+            labels.contains(&"Foo"),
+            "expected Public Sub Foo from module_a"
+        );
+        assert!(
+            !labels.contains(&"Bar"),
+            "Private Sub Bar should not appear"
+        );
     }
 
     // ── PLAN-13: With block leading-dot completion ───────────────────
@@ -719,7 +648,8 @@ mod tests {
         // Font is a property of Range that returns Font type
         // If Font type has members like Bold, they should appear
         // This test validates the chain resolution doesn't crash
-        assert!(!items.is_empty() || items.is_empty()); // at minimum no panic
+        // Chain dot-access resolution doesn't crash; items may or may not be returned.
+        let _ = &items;
     }
 
     // ── PLAN-19: Function return value dot-access ────────────────────
@@ -757,9 +687,5 @@ fn proc_at_position(
     position: Position,
 ) -> Option<smol_str::SmolStr> {
     let offset = position_to_offset(source, position)?;
-    symbols
-        .proc_ranges
-        .iter()
-        .find(|(_, range)| (range.start as usize) <= offset && offset < (range.end as usize))
-        .map(|(name, _)| name.clone())
+    crate::analysis::resolve::find_containing_proc(&symbols.proc_ranges, offset).cloned()
 }

@@ -8,15 +8,6 @@ use crate::analysis::resolve::{
 use crate::analysis::symbols::SymbolKind as AK;
 use crate::analysis::AnalysisHost;
 
-fn to_lsp_kind(kind: &AK) -> SymbolKind {
-    match kind {
-        AK::Function => SymbolKind::FUNCTION,
-        AK::Procedure => SymbolKind::FUNCTION,
-        AK::Property => SymbolKind::PROPERTY,
-        _ => SymbolKind::FUNCTION,
-    }
-}
-
 fn is_procedure_kind(kind: &AK) -> bool {
     matches!(kind, AK::Procedure | AK::Function | AK::Property)
 }
@@ -34,7 +25,7 @@ pub fn prepare_call_hierarchy(
         let range = text_range_to_lsp_range(source, sym.span);
         let item = CallHierarchyItem {
             name: sym.name.to_string(),
-            kind: to_lsp_kind(&sym.kind),
+            kind: sym.kind.to_lsp_symbol_kind(),
             tags: None,
             detail: None,
             uri: uri.clone(),
@@ -118,7 +109,7 @@ pub fn incoming_calls(
                                 s.name.eq_ignore_ascii_case(&caller_name)
                                     && is_procedure_kind(&s.kind)
                             })
-                            .map(|s| to_lsp_kind(&s.kind))
+                            .map(|s| s.kind.to_lsp_symbol_kind())
                             .unwrap_or(SymbolKind::FUNCTION)
                     })
                     .unwrap_or(SymbolKind::FUNCTION);
@@ -166,16 +157,18 @@ pub fn outgoing_calls(
         return Vec::new();
     };
 
-    let Some(caller_full_source) = host.with_source(caller_uri, |_, source| source.to_string())
-    else {
+    // Collect body source and known procs inside with_source to avoid clone
+    let Some((body_source_str, caller_source_str)) = host.with_source(caller_uri, |_, source| {
+        let body_start = body_span.start as usize;
+        let body_end = (body_span.end as usize).min(source.len());
+        (source[body_start..body_end].to_string(), source.to_string())
+    }) else {
         return Vec::new();
     };
 
     let body_start = body_span.start as usize;
-    let body_end = (body_span.end as usize).min(caller_full_source.len());
-    let body_source = &caller_full_source[body_start..body_end];
 
-    // Collect all known procedure names across all files (excluding self)
+    // Collect all known procedure names across all files
     let mut known_procs: Vec<(Url, String, crate::parser::ast::TextRange, AK)> = Vec::new();
     for (file_uri, _) in host.all_file_sources() {
         if let Some(procs) = host.with_source(&file_uri, |symbols, _| {
@@ -192,22 +185,22 @@ pub fn outgoing_calls(
 
     let mut result = Vec::new();
     for (proc_uri, proc_name, proc_span, proc_kind) in &known_procs {
-        // Skip self-reference
         if proc_name.eq_ignore_ascii_case(caller_name) && proc_uri == caller_uri {
             continue;
         }
-        let occs_in_body = find_all_word_occurrences(body_source, proc_name);
+        let occs_in_body = find_all_word_occurrences(&body_source_str, proc_name);
         if occs_in_body.is_empty() {
             continue;
         }
 
-        let Some(proc_source) = host.with_source(proc_uri, |_, s| s.to_string()) else {
+        let Some(to_range) =
+            host.with_source(proc_uri, |_, s| text_range_to_lsp_range(s, *proc_span))
+        else {
             continue;
         };
-        let to_range = text_range_to_lsp_range(&proc_source, *proc_span);
         let to = CallHierarchyItem {
             name: proc_name.clone(),
-            kind: to_lsp_kind(proc_kind),
+            kind: proc_kind.to_lsp_symbol_kind(),
             tags: None,
             detail: None,
             uri: proc_uri.clone(),
@@ -216,14 +209,13 @@ pub fn outgoing_calls(
             data: None,
         };
 
-        // Translate body-relative offsets back to absolute source positions
         let from_ranges = occs_in_body
             .iter()
             .map(|occ| {
                 let abs_start = body_start + occ.start as usize;
                 let abs_end = body_start + occ.end as usize;
-                let start_pos = offset_to_position(&caller_full_source, abs_start);
-                let end_pos = offset_to_position(&caller_full_source, abs_end);
+                let start_pos = offset_to_position(&caller_source_str, abs_start);
+                let end_pos = offset_to_position(&caller_source_str, abs_end);
                 Range::new(start_pos, end_pos)
             })
             .collect();

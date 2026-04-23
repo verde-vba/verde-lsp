@@ -8,9 +8,12 @@ use crate::parser::ast::ProcedureKind;
 
 pub fn hover(host: &AnalysisHost, uri: &Url, position: Position) -> Option<Hover> {
     // Dot-access: if cursor is on the right side of `obj.Member`, resolve the member.
-    if let Some(hover) = host.with_source(uri, |symbols, source| {
-        hover_dot_member(symbols, source, position)
-    }).flatten() {
+    if let Some(hover) = host
+        .with_source(uri, |symbols, source| {
+            hover_dot_member(symbols, source, position)
+        })
+        .flatten()
+    {
         return Some(hover);
     }
 
@@ -21,22 +24,16 @@ pub fn hover(host: &AnalysisHost, uri: &Url, position: Position) -> Option<Hover
 
         let sym = {
             let cursor_offset = resolve::position_to_offset(source, position);
-            let containing_proc = cursor_offset.and_then(|off| {
-                symbols
-                    .proc_ranges
-                    .iter()
-                    .find(|(_, r)| off >= r.start as usize && off <= r.end as usize)
-                    .map(|(name, _)| name.clone())
-            });
+            let containing_proc = cursor_offset
+                .and_then(|off| resolve::find_containing_proc(&symbols.proc_ranges, off));
 
-            if let Some(ref proc_name) = containing_proc {
+            if let Some(proc_name) = containing_proc {
                 matches
                     .iter()
                     .find(|s| {
                         s.proc_scope
                             .as_ref()
-                            .map(|p| p.eq_ignore_ascii_case(proc_name))
-                            .unwrap_or(false)
+                            .is_some_and(|p| p.eq_ignore_ascii_case(proc_name))
                     })
                     .copied()
                     .or_else(|| matches.first().copied())
@@ -66,10 +63,10 @@ fn hover_dot_member(
     position: Position,
 ) -> Option<Hover> {
     use crate::analysis::resolve::{parse_dot_access_at, position_to_offset};
-    use crate::excel_model::types::load_builtin_types;
+    use crate::excel_model::types::builtin_types;
 
     let offset = position_to_offset(source, position)?;
-    let (var_name, member_partial) = parse_dot_access_at(source, offset)?;
+    let (var_name, _member_partial) = parse_dot_access_at(source, offset)?;
 
     // The member_partial may be empty if cursor is right after dot.
     // Also need to check if cursor word extends beyond what parse_dot_access_at returned.
@@ -77,13 +74,6 @@ fn hover_dot_member(
 
     // We're in dot context; the word at cursor is the member name.
     let member_name = word;
-
-    // Resolve var_name to a type.
-    let cursor_proc = symbols
-        .proc_ranges
-        .iter()
-        .find(|(_, r)| offset >= r.start as usize && offset <= r.end as usize)
-        .map(|(name, _)| name.clone());
 
     // `Me.member` — look for module-level symbols.
     if var_name.eq_ignore_ascii_case("Me") {
@@ -94,25 +84,7 @@ fn hover_dot_member(
         return Some(symbol_to_hover(sym));
     }
 
-    let type_name = cursor_proc
-        .as_ref()
-        .and_then(|proc_name| {
-            symbols.symbols.iter().find(|s| {
-                s.name.eq_ignore_ascii_case(&var_name)
-                    && matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter)
-                    && s.proc_scope
-                        .as_ref()
-                        .is_some_and(|p| p.eq_ignore_ascii_case(proc_name))
-            })
-        })
-        .or_else(|| {
-            symbols.symbols.iter().find(|s| {
-                s.name.eq_ignore_ascii_case(&var_name)
-                    && matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter)
-                    && s.proc_scope.is_none()
-            })
-        })
-        .and_then(|s| s.type_name.clone())?;
+    let type_name = resolve::resolve_var_type_at(symbols, offset, &var_name)?;
 
     // Check UDT members.
     if let Some(sym) = symbols.symbols.iter().find(|s| {
@@ -129,8 +101,7 @@ fn hover_dot_member(
     }
 
     // Check Excel builtin type members.
-    let builtin_types = load_builtin_types();
-    if let Some(excel_type) = builtin_types
+    if let Some(excel_type) = builtin_types()
         .iter()
         .find(|t| t.name.eq_ignore_ascii_case(&type_name))
     {
@@ -168,9 +139,6 @@ fn hover_dot_member(
             });
         }
     }
-
-    // Ignore the member_partial to avoid unused variable warning
-    let _ = member_partial;
 
     None
 }

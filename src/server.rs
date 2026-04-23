@@ -73,14 +73,14 @@ fn server_capabilities() -> ServerCapabilities {
         document_symbol_provider: Some(OneOf::Left(true)),
         document_formatting_provider: Some(OneOf::Left(true)),
         inlay_hint_provider: Some(OneOf::Left(true)),
-        semantic_tokens_provider: Some(
-            SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions {
+        semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
+            SemanticTokensOptions {
                 legend: crate::semantic_tokens::legend(),
                 full: Some(SemanticTokensFullOptions::Bool(true)),
                 range: None,
                 ..Default::default()
-            }),
-        ),
+            },
+        )),
         call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
         ..Default::default()
     }
@@ -103,7 +103,11 @@ impl LanguageServer for VbaLanguageServer {
 
     async fn initialized(&self, _: InitializedParams) {
         // Clone before awaiting to drop the RwLockReadGuard first.
-        let root = self.root_uri.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let root = self
+            .root_uri
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         if let Some(root) = root {
             if let Ok(base) = root.to_file_path() {
                 self.analysis
