@@ -35,7 +35,7 @@ pub fn find_all_word_occurrences(source: &str, word: &str) -> Vec<TextRange> {
 
     while i + word_len <= bytes.len() {
         let prev_is_ident = i > 0 && is_ident_char(bytes[i - 1]);
-        if !prev_is_ident && source[i..i + word_len].eq_ignore_ascii_case(word) {
+        if !prev_is_ident && bytes[i..i + word_len].eq_ignore_ascii_case(word.as_bytes()) {
             let next_is_ident = (i + word_len) < bytes.len() && is_ident_char(bytes[i + word_len]);
             if !next_is_ident {
                 result.push(TextRange::new(i, i + word_len));
@@ -307,5 +307,13 @@ mod tests {
         let range = text_range_to_lsp_range(source, TextRange::new(4, 5));
         assert_eq!(range.start, Position::new(0, 2));
         assert_eq!(range.end, Position::new(0, 3));
+    }
+
+    #[test]
+    fn find_all_word_occurrences_handles_multibyte_source() {
+        // Japanese comments must not cause a panic when scanning for ASCII words.
+        let source = "' ワークブック\nDim x As Long\nx = 1\n' ユーティリティ\nx = x + 1";
+        let hits = find_all_word_occurrences(source, "x");
+        assert_eq!(hits.len(), 4);
     }
 }
