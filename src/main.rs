@@ -11,5 +11,15 @@ async fn main() {
     let stdout = tokio::io::stdout();
 
     let (service, socket) = LspService::new(server::VbaLanguageServer::new);
-    Server::new(stdin, stdout, socket).serve(service).await;
+
+    // Spawn serve() on a task so we can catch panics caused by broken
+    // stdio pipes (e.g. when the Tauri frontend terminates).
+    let handle = tokio::spawn(async move {
+        Server::new(stdin, stdout, socket).serve(service).await;
+    });
+
+    if let Err(e) = handle.await {
+        // The client has already disconnected — exit cleanly.
+        log::warn!("LSP server exited: {e}");
+    }
 }

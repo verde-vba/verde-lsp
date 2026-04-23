@@ -49,7 +49,7 @@ impl AnalysisHost {
         *self
             .workbook_context
             .write()
-            .expect("workbook_context RwLock poisoned: prior panic in write context") = ctx;
+            .unwrap_or_else(|e| e.into_inner()) = ctx;
     }
 
     /// Read `path`, parse as `WorkbookContext` JSON, and update the context.
@@ -67,7 +67,7 @@ impl AnalysisHost {
     fn read_workbook_context(&self) -> std::sync::RwLockReadGuard<'_, WorkbookContext> {
         self.workbook_context
             .read()
-            .expect("workbook_context RwLock poisoned")
+            .unwrap_or_else(|e| e.into_inner())
     }
 
     pub fn workbook_sheets(&self) -> Vec<String> {
