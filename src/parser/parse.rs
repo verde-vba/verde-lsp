@@ -6,6 +6,8 @@ use super::lexer::{self, Token};
 pub struct ParseResult {
     pub ast: Ast,
     pub errors: Vec<ParseError>,
+    /// Lexed tokens, retained for downstream consumers (semantic tokens, formatting).
+    pub tokens: Vec<lexer::SpannedToken>,
 }
 
 #[derive(Debug, Clone)]
@@ -15,7 +17,7 @@ pub struct ParseError {
 }
 
 pub fn parse(source: &str) -> ParseResult {
-    let tokens = lexer::lex(source);
+    let (tokens, lex_errors) = lexer::lex(source);
     let mut parser = Parser {
         tokens: &tokens,
         pos: 0,
@@ -25,9 +27,18 @@ pub fn parse(source: &str) -> ParseResult {
 
     parser.parse_module();
 
+    // Merge lexer errors into parse errors.
+    for lex_err in &lex_errors {
+        parser.errors.push(ParseError {
+            message: format!("Unexpected character: '{}'", &source[lex_err.span.clone()]),
+            span: lex_err.span.clone(),
+        });
+    }
+
     ParseResult {
         ast: parser.ast,
         errors: parser.errors,
+        tokens,
     }
 }
 
@@ -116,7 +127,11 @@ impl<'a> Parser<'a> {
                 Token::Enum => self.parse_enum_def(Visibility::Public),
                 Token::Declare => self.skip_to_end_of_line(),
                 Token::Implements => self.parse_implements(),
-                Token::HashIf | Token::HashElseIf | Token::HashElse | Token::HashEndIf | Token::HashConst => {
+                Token::HashIf
+                | Token::HashElseIf
+                | Token::HashElse
+                | Token::HashEndIf
+                | Token::HashConst => {
                     self.skip_to_end_of_line();
                 }
                 _ => {
@@ -578,7 +593,7 @@ impl<'a> Parser<'a> {
     /// of the statement; this function returns a ready-to-alloc
     /// `AstNode::Statement`.
     fn classify_and_parse_statement(&mut self) -> AstNode {
-        let head = self.peek().map(|t| t.token.clone());
+        let head = self.peek().map(|t| t.token);
         let decl_kind = match head {
             Some(Token::Dim) => Some(DeclKind::Dim),
             Some(Token::Static) => Some(DeclKind::Static),
@@ -659,6 +674,11 @@ impl<'a> Parser<'a> {
         while let Some(t) = self.peek() {
             match t.token {
                 Token::Newline | Token::Colon if paren_depth == 0 => break,
+                Token::Comment if paren_depth == 0 => {
+                    // Skip comments — they inflate token vectors without contributing
+                    // to downstream analysis (diagnostics, symbol resolution).
+                    self.pos += 1;
+                }
                 Token::LParen => {
                     paren_depth += 1;
                     end_offset = t.span.end;
@@ -816,6 +836,13 @@ impl<'a> Parser<'a> {
             }
             self.pos += 1;
         }
+
+        // EOF reached without finding `End Type`
+        let end = self.tokens.last().map(|t| t.span.end).unwrap_or(start);
+        self.errors.push(ParseError {
+            message: format!("Unterminated Type: {}", name),
+            span: start..end,
+        });
     }
 
     /// After consuming an enum member identifier, optionally read `= <integer-literal>`.
@@ -901,6 +928,13 @@ impl<'a> Parser<'a> {
             }
             self.pos += 1;
         }
+
+        // EOF reached without finding `End Enum`
+        let end = self.tokens.last().map(|t| t.span.end).unwrap_or(start);
+        self.errors.push(ParseError {
+            message: format!("Unterminated Enum: {}", name),
+            span: start..end,
+        });
     }
 }
 
@@ -1654,7 +1688,10 @@ mod tests {
             AstNode::Procedure(p) => Some(p),
             _ => None,
         });
-        assert!(proc.is_some(), "expected Sub Main after conditional compilation block");
+        assert!(
+            proc.is_some(),
+            "expected Sub Main after conditional compilation block"
+        );
         assert_eq!(proc.unwrap().name.as_str(), "Main");
     }
 

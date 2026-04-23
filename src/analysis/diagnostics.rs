@@ -12,16 +12,15 @@ pub fn compute(
     parse_result: &ParseResult,
     symbols: &SymbolTable,
     source: &str,
-    cross_module_names: &std::collections::HashSet<String>,
+    cross_module_names: &std::collections::HashSet<SmolStr>,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
     for error in &parse_result.errors {
+        let range =
+            text_range_to_lsp_range(source, TextRange::new(error.span.start, error.span.end));
         diagnostics.push(Diagnostic {
-            range: Range::new(
-                Position::new(0, error.span.start as u32),
-                Position::new(0, error.span.end as u32),
-            ),
+            range,
             severity: Some(DiagnosticSeverity::ERROR),
             source: Some("verde-lsp".to_string()),
             message: error.message.clone(),
@@ -68,7 +67,7 @@ pub fn check_option_explicit(
     ast: &Ast,
     source: &str,
     symbols: &SymbolTable,
-    cross_module_names: &std::collections::HashSet<String>,
+    cross_module_names: &std::collections::HashSet<SmolStr>,
 ) -> Vec<Diagnostic> {
     let mut declared = collect_module_declared(symbols);
     declared.extend(cross_module_names.iter().cloned());
@@ -88,25 +87,25 @@ pub fn check_option_explicit(
 /// Build the module-global "declared or builtin" lowercase set. Every
 /// procedure body scan sees the same set plus its own procedure-scoped locals
 /// and parameters.
-fn collect_module_declared(symbols: &SymbolTable) -> std::collections::HashSet<String> {
-    let mut declared: std::collections::HashSet<String> = std::collections::HashSet::new();
+fn collect_module_declared(symbols: &SymbolTable) -> std::collections::HashSet<SmolStr> {
+    let mut declared: std::collections::HashSet<SmolStr> = std::collections::HashSet::new();
     for sym in &symbols.symbols {
-        declared.insert(sym.name.to_ascii_lowercase());
+        declared.insert(SmolStr::new(sym.name.to_ascii_lowercase()));
     }
     for kw in KEYWORDS {
-        declared.insert(kw.to_ascii_lowercase());
+        declared.insert(SmolStr::new(kw.to_ascii_lowercase()));
     }
     for f in BUILTIN_FUNCTIONS {
-        declared.insert(f.to_ascii_lowercase());
+        declared.insert(SmolStr::new(f.to_ascii_lowercase()));
     }
     for t in BUILTIN_TYPES {
-        declared.insert(t.to_ascii_lowercase());
+        declared.insert(SmolStr::new(t.to_ascii_lowercase()));
     }
     // Excel `Application` members are VBA globals in the Excel host
     // (e.g. `ActiveWorkbook`, `Range`, `Cells`, `Worksheets`), so they
     // count as declared under Option Explicit.
     for name in crate::excel_model::types::application_globals() {
-        declared.insert(name.to_ascii_lowercase());
+        declared.insert(SmolStr::new(name.to_ascii_lowercase()));
     }
     declared
 }
@@ -117,14 +116,14 @@ fn scan_procedure(
     proc: &ProcedureNode,
     ast: &Ast,
     source: &str,
-    declared: &std::collections::HashSet<String>,
+    declared: &std::collections::HashSet<SmolStr>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     // Seed per-procedure local scope with parameter names.
-    let mut local_declared: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut local_declared: std::collections::HashSet<SmolStr> = std::collections::HashSet::new();
     for param_id in &proc.params {
         if let AstNode::Parameter(param) = &ast.nodes[*param_id] {
-            local_declared.insert(param.name.to_ascii_lowercase());
+            local_declared.insert(SmolStr::new(param.name.to_ascii_lowercase()));
         }
     }
 
@@ -136,105 +135,15 @@ fn scan_procedure(
         match stmt {
             StatementNode::LocalDeclaration(decl) => {
                 for (name, _, _) in &decl.names {
-                    local_declared.insert(name.to_ascii_lowercase());
+                    local_declared.insert(SmolStr::new(name.to_ascii_lowercase()));
                 }
             }
-            StatementNode::Expression(expr) => {
-                scan_expression_tokens(
-                    &expr.tokens,
-                    source,
-                    declared,
-                    &local_declared,
-                    diagnostics,
-                );
+            _ => {
+                let tokens = stmt.tokens();
+                if !tokens.is_empty() {
+                    scan_expression_tokens(tokens, source, declared, &local_declared, diagnostics);
+                }
             }
-            StatementNode::If(node) => {
-                scan_expression_tokens(
-                    &node.tokens,
-                    source,
-                    declared,
-                    &local_declared,
-                    diagnostics,
-                );
-            }
-            StatementNode::For(node) => {
-                scan_expression_tokens(
-                    &node.tokens,
-                    source,
-                    declared,
-                    &local_declared,
-                    diagnostics,
-                );
-            }
-            StatementNode::With(node) => {
-                scan_expression_tokens(
-                    &node.tokens,
-                    source,
-                    declared,
-                    &local_declared,
-                    diagnostics,
-                );
-            }
-            StatementNode::Select(node) => {
-                scan_expression_tokens(
-                    &node.tokens,
-                    source,
-                    declared,
-                    &local_declared,
-                    diagnostics,
-                );
-            }
-            StatementNode::Call(node) => {
-                scan_expression_tokens(
-                    &node.tokens,
-                    source,
-                    declared,
-                    &local_declared,
-                    diagnostics,
-                );
-            }
-            StatementNode::Set(node) => {
-                scan_expression_tokens(
-                    &node.tokens,
-                    source,
-                    declared,
-                    &local_declared,
-                    diagnostics,
-                );
-            }
-            StatementNode::While(node) => {
-                scan_expression_tokens(
-                    &node.tokens,
-                    source,
-                    declared,
-                    &local_declared,
-                    diagnostics,
-                );
-            }
-            StatementNode::Do(node) => {
-                scan_expression_tokens(
-                    &node.tokens,
-                    source,
-                    declared,
-                    &local_declared,
-                    diagnostics,
-                );
-            }
-            StatementNode::Redim(node) => {
-                scan_expression_tokens(
-                    &node.tokens,
-                    source,
-                    declared,
-                    &local_declared,
-                    diagnostics,
-                );
-            }
-            // Exit Sub/Function/For/Do, GoTo, and On Error contain no variable
-            // references (targets are reserved words or label names), so no
-            // undeclared-identifier scan is needed.
-            StatementNode::Exit(_) => {}
-            StatementNode::GoTo(_) => {}
-            StatementNode::OnError(_) => {}
         }
     }
 }
@@ -245,8 +154,8 @@ fn scan_procedure(
 fn scan_expression_tokens(
     tokens: &[crate::parser::lexer::SpannedToken],
     source: &str,
-    declared: &std::collections::HashSet<String>,
-    local_declared: &std::collections::HashSet<String>,
+    declared: &std::collections::HashSet<SmolStr>,
+    local_declared: &std::collections::HashSet<SmolStr>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     // `prev_token` is the previous non-trivia token (trivia = Comment).
@@ -256,7 +165,7 @@ fn scan_expression_tokens(
     for spanned in tokens {
         if spanned.token != Token::Identifier {
             if !matches!(spanned.token, Token::Comment) {
-                prev_token = Some(spanned.token.clone());
+                prev_token = Some(spanned.token);
             }
             continue;
         }
@@ -269,7 +178,7 @@ fn scan_expression_tokens(
             continue;
         }
 
-        let lower = spanned.text.to_ascii_lowercase();
+        let lower = SmolStr::new(spanned.text.to_ascii_lowercase());
         if declared.contains(&lower) || local_declared.contains(&lower) {
             continue;
         }
@@ -305,9 +214,7 @@ fn check_unused_variables(ast: &Ast, source: &str) -> Vec<Diagnostic> {
         // Collect locally declared variable names and their spans.
         let mut locals: Vec<(SmolStr, TextRange)> = Vec::new();
         for &stmt_id in &proc.body {
-            if let AstNode::Statement(StatementNode::LocalDeclaration(decl)) =
-                &ast.nodes[stmt_id]
-            {
+            if let AstNode::Statement(StatementNode::LocalDeclaration(decl)) = &ast.nodes[stmt_id] {
                 for (name, _, name_span) in &decl.names {
                     // Skip variables with _ prefix.
                     if name.starts_with('_') {
@@ -322,42 +229,29 @@ fn check_unused_variables(ast: &Ast, source: &str) -> Vec<Diagnostic> {
             continue;
         }
 
-        // Collect all identifier texts from non-declaration body statements.
-        let mut used_idents: std::collections::HashSet<SmolStr> =
-            std::collections::HashSet::new();
+        // Collect all identifier texts (lowercased) from non-declaration body statements.
+        let mut used_idents: std::collections::HashSet<SmolStr> = std::collections::HashSet::new();
         for &stmt_id in &proc.body {
             let stmt = match &ast.nodes[stmt_id] {
                 AstNode::Statement(s) => s,
                 _ => continue,
             };
-            let tokens: &[crate::parser::lexer::SpannedToken] = match stmt {
+            match stmt {
                 StatementNode::LocalDeclaration(_) => continue,
-                StatementNode::Expression(n) => &n.tokens,
-                StatementNode::If(n) => &n.tokens,
-                StatementNode::For(n) => &n.tokens,
-                StatementNode::With(n) => &n.tokens,
-                StatementNode::Select(n) => &n.tokens,
-                StatementNode::Call(n) => &n.tokens,
-                StatementNode::Set(n) => &n.tokens,
-                StatementNode::While(n) => &n.tokens,
-                StatementNode::Do(n) => &n.tokens,
-                StatementNode::Redim(n) => &n.tokens,
-                StatementNode::Exit(n) => &n.tokens,
-                StatementNode::GoTo(n) => &n.tokens,
-                StatementNode::OnError(n) => &n.tokens,
-            };
-            for spanned in tokens {
-                if spanned.token == Token::Identifier {
-                    used_idents.insert(spanned.text.clone());
+                _ => {
+                    for spanned in stmt.tokens() {
+                        if spanned.token == Token::Identifier {
+                            used_idents.insert(SmolStr::new(spanned.text.to_ascii_lowercase()));
+                        }
+                    }
                 }
             }
         }
 
         // Emit diagnostics for declared-but-unused locals.
         for (name, span) in &locals {
-            let is_used = used_idents
-                .iter()
-                .any(|ident| ident.eq_ignore_ascii_case(name.as_str()));
+            let lower_name = SmolStr::new(name.to_ascii_lowercase());
+            let is_used = used_idents.contains(&lower_name);
             if !is_used {
                 diagnostics.push(Diagnostic {
                     range: text_range_to_lsp_range(source, *span),
@@ -386,7 +280,7 @@ mod tests {
             &result,
             &symbols,
             source,
-            &std::collections::HashSet::new(),
+            &std::collections::HashSet::<SmolStr>::new(),
         );
         assert!(diags
             .iter()
@@ -402,7 +296,7 @@ mod tests {
             &result,
             &symbols,
             source,
-            &std::collections::HashSet::new(),
+            &std::collections::HashSet::<SmolStr>::new(),
         );
         assert!(!diags.iter().any(|d| d.message.contains("never used")));
     }
@@ -416,7 +310,7 @@ mod tests {
             &result,
             &symbols,
             source,
-            &std::collections::HashSet::new(),
+            &std::collections::HashSet::<SmolStr>::new(),
         );
         assert!(!diags.iter().any(|d| d.message.contains("_unused")));
     }

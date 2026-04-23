@@ -1,6 +1,6 @@
 use logos::Logos;
 
-#[derive(Logos, Debug, PartialEq, Clone)]
+#[derive(Logos, Debug, PartialEq, Clone, Copy)]
 #[logos(skip r"[ \t\r]+")]
 pub enum Token {
     // Keywords
@@ -280,19 +280,281 @@ pub struct SpannedToken {
     pub text: smol_str::SmolStr,
 }
 
-pub fn lex(source: &str) -> Vec<SpannedToken> {
+#[derive(Debug, Clone)]
+pub struct LexError {
+    pub span: std::ops::Range<usize>,
+}
+
+pub fn lex(source: &str) -> (Vec<SpannedToken>, Vec<LexError>) {
     let mut tokens = Vec::new();
+    let mut errors = Vec::new();
     let mut lexer = Token::lexer(source);
 
     while let Some(result) = lexer.next() {
-        if let Ok(token) = result {
-            tokens.push(SpannedToken {
-                token,
-                span: lexer.span(),
-                text: smol_str::SmolStr::new(lexer.slice()),
-            });
+        match result {
+            Ok(token) => {
+                tokens.push(SpannedToken {
+                    token,
+                    span: lexer.span(),
+                    text: smol_str::SmolStr::new(lexer.slice()),
+                });
+            }
+            Err(()) => {
+                errors.push(LexError { span: lexer.span() });
+            }
         }
     }
 
-    tokens
+    (tokens, errors)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn token_types(source: &str) -> Vec<Token> {
+        let (tokens, _) = lex(source);
+        tokens.into_iter().map(|t| t.token).collect()
+    }
+
+    // ── Keywords ─────────────────────────────────────────────────────
+
+    #[test]
+    fn lex_keywords_case_insensitive() {
+        assert_eq!(token_types("sub"), vec![Token::Sub]);
+        assert_eq!(token_types("SUB"), vec![Token::Sub]);
+        assert_eq!(token_types("Sub"), vec![Token::Sub]);
+        assert_eq!(token_types("DIM"), vec![Token::Dim]);
+        assert_eq!(token_types("function"), vec![Token::Function]);
+    }
+
+    #[test]
+    fn lex_multi_word_tokens() {
+        assert_eq!(token_types("End Sub"), vec![Token::EndSub]);
+        assert_eq!(token_types("end sub"), vec![Token::EndSub]);
+        assert_eq!(token_types("End Function"), vec![Token::EndFunction]);
+        assert_eq!(token_types("End If"), vec![Token::EndIf]);
+        assert_eq!(token_types("End Select"), vec![Token::EndSelect]);
+        assert_eq!(token_types("End With"), vec![Token::EndWith]);
+        assert_eq!(token_types("End Type"), vec![Token::EndType]);
+        assert_eq!(token_types("End Enum"), vec![Token::EndEnum]);
+    }
+
+    #[test]
+    fn lex_conditional_compilation() {
+        assert_eq!(token_types("#If"), vec![Token::HashIf]);
+        assert_eq!(token_types("#ElseIf"), vec![Token::HashElseIf]);
+        assert_eq!(token_types("#Else"), vec![Token::HashElse]);
+        assert_eq!(token_types("#End If"), vec![Token::HashEndIf]);
+        assert_eq!(token_types("#Const"), vec![Token::HashConst]);
+    }
+
+    // ── Operators ────────────────────────────────────────────────────
+
+    #[test]
+    fn lex_operators() {
+        assert_eq!(token_types("="), vec![Token::Eq]);
+        assert_eq!(token_types("<>"), vec![Token::Neq]);
+        assert_eq!(token_types("<="), vec![Token::Lte]);
+        assert_eq!(token_types(">="), vec![Token::Gte]);
+        assert_eq!(token_types("<"), vec![Token::Lt]);
+        assert_eq!(token_types(">"), vec![Token::Gt]);
+        assert_eq!(
+            token_types("+ - * / \\ ^ &"),
+            vec![
+                Token::Plus,
+                Token::Minus,
+                Token::Star,
+                Token::Slash,
+                Token::IntDiv,
+                Token::Caret,
+                Token::Ampersand
+            ]
+        );
+    }
+
+    #[test]
+    fn lex_word_operators() {
+        assert_eq!(token_types("And"), vec![Token::And]);
+        assert_eq!(token_types("Or"), vec![Token::Or]);
+        assert_eq!(token_types("Not"), vec![Token::Not]);
+        assert_eq!(token_types("Mod"), vec![Token::Mod]);
+    }
+
+    // ── Literals ─────────────────────────────────────────────────────
+
+    #[test]
+    fn lex_number_literals() {
+        let types = token_types("42 3.14 1e10 2.5E-3");
+        assert_eq!(
+            types,
+            vec![
+                Token::NumberLiteral,
+                Token::NumberLiteral,
+                Token::NumberLiteral,
+                Token::NumberLiteral,
+            ]
+        );
+    }
+
+    #[test]
+    fn lex_string_literal() {
+        let (tokens, _) = lex("\"hello world\"");
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].token, Token::StringLiteral);
+        assert_eq!(tokens[0].text.as_str(), "\"hello world\"");
+    }
+
+    #[test]
+    fn lex_hex_literal() {
+        let (tokens, _) = lex("&HFF &h10&");
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(tokens[0].token, Token::HexLiteral);
+        assert_eq!(tokens[1].token, Token::HexLiteral);
+    }
+
+    #[test]
+    fn lex_date_literal() {
+        let (tokens, _) = lex("#1/15/2024#");
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].token, Token::DateLiteral);
+    }
+
+    // ── Identifiers ──────────────────────────────────────────────────
+
+    #[test]
+    fn lex_identifier() {
+        let (tokens, _) = lex("myVar _private foo123");
+        assert_eq!(tokens.len(), 3);
+        assert!(tokens.iter().all(|t| t.token == Token::Identifier));
+        assert_eq!(tokens[0].text.as_str(), "myVar");
+        assert_eq!(tokens[1].text.as_str(), "_private");
+        assert_eq!(tokens[2].text.as_str(), "foo123");
+    }
+
+    // ── Comments ─────────────────────────────────────────────────────
+
+    #[test]
+    fn lex_comment() {
+        let (tokens, _) = lex("' this is a comment\n");
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(tokens[0].token, Token::Comment);
+        assert_eq!(tokens[1].token, Token::Newline);
+    }
+
+    #[test]
+    fn lex_comment_preserves_text() {
+        let (tokens, _) = lex("' hello world");
+        assert_eq!(tokens[0].text.as_str(), "' hello world");
+    }
+
+    // ── Line continuation ────────────────────────────────────────────
+
+    #[test]
+    fn lex_line_continuation() {
+        let (tokens, _) = lex("x _\ny");
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0].token, Token::Identifier);
+        assert_eq!(tokens[1].token, Token::LineContinuation);
+        assert_eq!(tokens[2].token, Token::Identifier);
+    }
+
+    // ── Delimiters ───────────────────────────────────────────────────
+
+    #[test]
+    fn lex_delimiters() {
+        assert_eq!(
+            token_types("( ) , . : ;"),
+            vec![
+                Token::LParen,
+                Token::RParen,
+                Token::Comma,
+                Token::Dot,
+                Token::Colon,
+                Token::Semicolon
+            ]
+        );
+    }
+
+    // ── Error handling ───────────────────────────────────────────────
+
+    #[test]
+    fn lex_error_on_invalid_character() {
+        let (tokens, errors) = lex("x @ y");
+        // @ is not a valid VBA token
+        assert!(!errors.is_empty(), "expected a lex error for '@'");
+        // x and y should still be lexed
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(tokens[0].text.as_str(), "x");
+        assert_eq!(tokens[1].text.as_str(), "y");
+    }
+
+    #[test]
+    fn lex_error_does_not_prevent_subsequent_tokens() {
+        let (tokens, errors) = lex("Dim @ x As Long");
+        assert!(!errors.is_empty());
+        assert!(tokens.iter().any(|t| t.token == Token::Dim));
+        assert!(tokens.iter().any(|t| t.token == Token::As));
+        assert!(tokens.iter().any(|t| t.token == Token::LongType));
+    }
+
+    // ── Type keywords ────────────────────────────────────────────────
+
+    #[test]
+    fn lex_type_keywords() {
+        assert_eq!(token_types("Boolean"), vec![Token::BooleanType]);
+        assert_eq!(token_types("Integer"), vec![Token::IntegerType]);
+        assert_eq!(token_types("Long"), vec![Token::LongType]);
+        assert_eq!(token_types("String"), vec![Token::StringType]);
+        assert_eq!(token_types("Variant"), vec![Token::VariantType]);
+        assert_eq!(token_types("Object"), vec![Token::ObjectType]);
+    }
+
+    // ── Span correctness ─────────────────────────────────────────────
+
+    #[test]
+    fn lex_span_covers_token_text() {
+        let source = "Dim x As Long";
+        let (tokens, _) = lex(source);
+        for t in &tokens {
+            assert_eq!(
+                &source[t.span.clone()],
+                t.text.as_str(),
+                "span mismatch for {:?}",
+                t.token
+            );
+        }
+    }
+
+    // ── Full statement ───────────────────────────────────────────────
+
+    #[test]
+    fn lex_full_dim_statement() {
+        let types = token_types("Dim x As Long\n");
+        assert_eq!(
+            types,
+            vec![
+                Token::Dim,
+                Token::Identifier,
+                Token::As,
+                Token::LongType,
+                Token::Newline
+            ]
+        );
+    }
+
+    #[test]
+    fn lex_sub_declaration() {
+        let types = token_types("Sub Foo()\n");
+        assert_eq!(
+            types,
+            vec![
+                Token::Sub,
+                Token::Identifier,
+                Token::LParen,
+                Token::RParen,
+                Token::Newline
+            ]
+        );
+    }
 }

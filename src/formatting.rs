@@ -2,7 +2,7 @@ use crate::parser::lexer::{lex, SpannedToken, Token};
 
 pub fn apply_formatting(src: &str) -> String {
     // Phase 1: keyword case normalization (token gap preservation)
-    let tokens = lex(src);
+    let (tokens, _lex_errors) = lex(src);
     let mut keyword_normalized = String::with_capacity(src.len());
     let mut pos = 0usize;
 
@@ -50,7 +50,7 @@ pub fn apply_formatting(src: &str) -> String {
 ///
 /// Returns one `usize` per line (matching `src.lines()` iteration order).
 /// Blank lines always get depth 0.
-pub fn calculate_line_indents(src: &str) -> Vec<usize> {
+fn calculate_line_indents(src: &str) -> Vec<usize> {
     let mut depths = Vec::new();
     let mut depth: i32 = 0;
 
@@ -62,7 +62,7 @@ pub fn calculate_line_indents(src: &str) -> Vec<usize> {
             continue;
         }
 
-        let tokens = lex(trimmed);
+        let (tokens, _) = lex(trimmed);
         let first = tokens.first().map(|st| &st.token);
 
         let line_depth = match first {

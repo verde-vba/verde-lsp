@@ -2,7 +2,7 @@ use tower_lsp::lsp_types::*;
 
 use crate::analysis::resolve::offset_to_position;
 use crate::analysis::AnalysisHost;
-use crate::parser::lexer::{self, Token};
+use crate::parser::lexer::Token;
 
 /// Token types we report, in legend order.
 pub(crate) const TOKEN_TYPES: &[SemanticTokenType] = &[
@@ -150,13 +150,12 @@ fn classify(token: &Token) -> Option<u32> {
 }
 
 pub(crate) fn semantic_tokens(host: &AnalysisHost, uri: &Url) -> Option<SemanticTokensResult> {
-    let tokens_data = host.with_source(uri, |_symbols, source| {
-        let lexer_tokens = lexer::lex(source);
+    let tokens_data = host.with_tokens(uri, |_symbols, source, lexer_tokens| {
         let mut data: Vec<SemanticToken> = Vec::new();
         let mut prev_line = 0u32;
         let mut prev_char = 0u32;
 
-        for st in &lexer_tokens {
+        for st in lexer_tokens {
             let type_index = match classify(&st.token) {
                 Some(idx) => idx,
                 None => continue,
