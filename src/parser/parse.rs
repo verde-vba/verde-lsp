@@ -673,7 +673,21 @@ impl<'a> Parser<'a> {
 
         while let Some(t) = self.peek() {
             match t.token {
-                Token::Newline | Token::Colon if paren_depth == 0 => break,
+                Token::Newline if paren_depth == 0 => break,
+                Token::Colon if paren_depth == 0 => {
+                    // `:=` is a named-argument operator, not a statement separator.
+                    if self
+                        .tokens
+                        .get(self.pos + 1)
+                        .is_some_and(|next| next.token == Token::Eq)
+                    {
+                        end_offset = t.span.end;
+                        tokens.push(t.clone());
+                        self.pos += 1;
+                    } else {
+                        break;
+                    }
+                }
                 Token::Comment if paren_depth == 0 => {
                     // Skip comments — they inflate token vectors without contributing
                     // to downstream analysis (diagnostics, symbol resolution).

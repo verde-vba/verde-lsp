@@ -9,7 +9,7 @@ use crate::parser::ParseResult;
 use crate::vba_builtins::{BUILTIN_FUNCTIONS, BUILTIN_TYPES, EXCEL_CONSTANTS, KEYWORDS, VBA_CONSTANTS};
 
 /// VBA runtime global objects that are always available without declaration.
-const VBA_GLOBAL_OBJECTS: &[&str] = &["Debug", "Err"];
+const VBA_GLOBAL_OBJECTS: &[&str] = &["Application", "Debug", "Err"];
 
 pub fn compute(
     parse_result: &ParseResult,
@@ -182,7 +182,8 @@ fn scan_procedure(
 
 /// Walk tokens of a single expression statement and emit Option Explicit
 /// warnings for identifiers that are neither declared nor occupy a
-/// non-reference position (type after `As`, member name after `.`).
+/// non-reference position (type after `As`, member name after `.`,
+/// named argument label before `:=`).
 fn scan_expression_tokens(
     tokens: &[crate::parser::lexer::SpannedToken],
     source: &str,
@@ -190,15 +191,23 @@ fn scan_expression_tokens(
     local_declared: &std::collections::HashSet<SmolStr>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // `prev_token` is the previous non-trivia token (trivia = Comment).
+    // `prev_token` is the previous non-trivia token
+    // (trivia = Comment | LineContinuation).
     // Used to detect `.Ident` (member access RHS) and `As Ident` (type pos).
     let mut prev_token: Option<Token> = None;
+    let mut i = 0;
 
-    for spanned in tokens {
+    while i < tokens.len() {
+        let spanned = &tokens[i];
+
         if spanned.token != Token::Identifier {
-            if !matches!(spanned.token, Token::Comment) {
+            if !matches!(
+                spanned.token,
+                Token::Comment | Token::LineContinuation
+            ) {
                 prev_token = Some(spanned.token);
             }
+            i += 1;
             continue;
         }
 
@@ -207,11 +216,19 @@ fn scan_expression_tokens(
         prev_token = Some(Token::Identifier);
 
         if after_dot || after_as {
+            i += 1;
+            continue;
+        }
+
+        // Named argument label: `Ident := expr` — skip the label.
+        if is_named_arg_label(tokens, i) {
+            i += 1;
             continue;
         }
 
         let lower = SmolStr::new(spanned.text.to_ascii_lowercase());
         if declared.contains(&lower) || local_declared.contains(&lower) {
+            i += 1;
             continue;
         }
 
@@ -227,7 +244,37 @@ fn scan_expression_tokens(
             ),
             ..Default::default()
         });
+        i += 1;
     }
+}
+
+/// Return `true` when the identifier at `idx` is a VBA named-argument label,
+/// i.e. the next non-trivia tokens are `Colon` then `Eq` (`:=`).
+fn is_named_arg_label(tokens: &[crate::parser::lexer::SpannedToken], idx: usize) -> bool {
+    let mut j = idx + 1;
+    // Skip trivia between the identifier and the expected `:`.
+    while j < tokens.len()
+        && matches!(
+            tokens[j].token,
+            Token::Comment | Token::LineContinuation
+        )
+    {
+        j += 1;
+    }
+    if j >= tokens.len() || tokens[j].token != Token::Colon {
+        return false;
+    }
+    j += 1;
+    // Skip trivia between `:` and the expected `=`.
+    while j < tokens.len()
+        && matches!(
+            tokens[j].token,
+            Token::Comment | Token::LineContinuation
+        )
+    {
+        j += 1;
+    }
+    j < tokens.len() && tokens[j].token == Token::Eq
 }
 
 /// Walk every procedure in the AST and emit a WARNING for each local variable
@@ -345,5 +392,83 @@ mod tests {
             &std::collections::HashSet::<SmolStr>::new(),
         );
         assert!(!diags.iter().any(|d| d.message.contains("_unused")));
+    }
+
+    #[test]
+    fn named_arg_labels_not_flagged() {
+        let source = "Option Explicit\nSub Foo()\n    MsgBox Prompt:=\"hello\", Title:=\"t\"\nEnd Sub\n";
+        let result = crate::parser::parse(source);
+        let symbols = crate::analysis::symbols::build_symbol_table(&result.ast);
+        let diags = compute(
+            &result,
+            &symbols,
+            source,
+            &std::collections::HashSet::<SmolStr>::new(),
+        );
+        let undeclared: Vec<_> = diags
+            .iter()
+            .filter(|d| d.message.contains("not declared"))
+            .collect();
+        assert!(
+            undeclared.is_empty(),
+            "Named argument labels should not be flagged: {:?}",
+            undeclared.iter().map(|d| &d.message).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn vba_color_and_file_constants_not_flagged() {
+        let source =
+            "Option Explicit\nSub Foo()\n    Dim x As Long\n    x = vbRed\n    x = vbDirectory\nEnd Sub\n";
+        let result = crate::parser::parse(source);
+        let symbols = crate::analysis::symbols::build_symbol_table(&result.ast);
+        let diags = compute(
+            &result,
+            &symbols,
+            source,
+            &std::collections::HashSet::<SmolStr>::new(),
+        );
+        assert!(
+            !diags.iter().any(|d| d.message.contains("vbRed")
+                || d.message.contains("vbDirectory")),
+            "vbRed/vbDirectory should be recognised as built-in constants"
+        );
+    }
+
+    #[test]
+    fn excel_validation_constants_not_flagged() {
+        let source =
+            "Option Explicit\nSub Foo()\n    Dim x As Long\n    x = xlValidateList\n    x = xlValidAlertStop\nEnd Sub\n";
+        let result = crate::parser::parse(source);
+        let symbols = crate::analysis::symbols::build_symbol_table(&result.ast);
+        let diags = compute(
+            &result,
+            &symbols,
+            source,
+            &std::collections::HashSet::<SmolStr>::new(),
+        );
+        assert!(
+            !diags.iter().any(|d| d.message.contains("xlValidateList")
+                || d.message.contains("xlValidAlertStop")),
+            "xlValidateList/xlValidAlertStop should be recognised as Excel constants"
+        );
+    }
+
+    #[test]
+    fn application_global_not_flagged() {
+        let source =
+            "Option Explicit\nSub Foo()\n    Application.ScreenUpdating = False\nEnd Sub\n";
+        let result = crate::parser::parse(source);
+        let symbols = crate::analysis::symbols::build_symbol_table(&result.ast);
+        let diags = compute(
+            &result,
+            &symbols,
+            source,
+            &std::collections::HashSet::<SmolStr>::new(),
+        );
+        assert!(
+            !diags.iter().any(|d| d.message.contains("Application")),
+            "Application should be recognised as a VBA global object"
+        );
     }
 }
