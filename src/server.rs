@@ -24,12 +24,15 @@ impl VbaLanguageServer {
     }
 
     async fn on_change(&self, uri: Url, text: String) {
+        log::debug!("[on_change] uri={} text_len={}", uri, text.len());
         let parse_result = parser::parse(&text);
+        log::debug!("[on_change] parsed — errors={} tokens={}", parse_result.errors.len(), parse_result.tokens.len());
         self.analysis
             .update(uri.clone(), text.clone(), parse_result);
         self.documents.insert(uri.clone(), text);
 
         let diagnostics = self.analysis.diagnostics(&uri);
+        log::debug!("[on_change] publishing {} diagnostics for {}", diagnostics.len(), uri);
         self.client
             .publish_diagnostics(uri, diagnostics, None)
             .await;
@@ -89,25 +92,39 @@ fn server_capabilities() -> ServerCapabilities {
 #[tower_lsp::async_trait]
 impl LanguageServer for VbaLanguageServer {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        log::info!("[initialize] received — root_uri={:?} client={:?}",
+            params.root_uri, params.client_info);
         // Capture workspace root for workbook-context.json discovery.
         let root = params
             .root_uri
             .or_else(|| params.workspace_folders?.into_iter().next().map(|f| f.uri));
+        log::info!("[initialize] resolved root={:?}", root);
         *self.root_uri.write().unwrap_or_else(|e| e.into_inner()) = root;
 
+        let caps = server_capabilities();
+        log::info!("[initialize] returning capabilities — completion={} hover={} definition={} rename={} formatting={} semanticTokens={}",
+            caps.completion_provider.is_some(),
+            caps.hover_provider.is_some(),
+            caps.definition_provider.is_some(),
+            caps.rename_provider.is_some(),
+            caps.document_formatting_provider.is_some(),
+            caps.semantic_tokens_provider.is_some(),
+        );
         Ok(InitializeResult {
-            capabilities: server_capabilities(),
+            capabilities: caps,
             ..Default::default()
         })
     }
 
     async fn initialized(&self, _: InitializedParams) {
+        log::info!("[initialized] notification received");
         // Clone before awaiting to drop the RwLockReadGuard first.
         let root = self
             .root_uri
             .read()
             .unwrap_or_else(|e| e.into_inner())
             .clone();
+        log::info!("[initialized] root_uri={:?}", root);
         if let Some(root) = root {
             if let Ok(base) = root.to_file_path() {
                 self.analysis
@@ -139,31 +156,47 @@ impl LanguageServer for VbaLanguageServer {
     }
 
     async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
+        log::info!("[didChangeWatchedFiles] {} changes", params.changes.len());
         for change in &params.changes {
+            log::info!("[didChangeWatchedFiles] uri={} type={:?}", change.uri, change.typ);
             if change.uri.path().ends_with("workbook-context.json") {
                 if let Ok(path) = change.uri.to_file_path() {
-                    self.analysis.reload_workbook_context_from_path(&path);
+                    let ok = self.analysis.reload_workbook_context_from_path(&path);
+                    log::info!("[didChangeWatchedFiles] reloaded workbook-context.json: success={}", ok);
                 }
             }
         }
     }
 
     async fn shutdown(&self) -> Result<()> {
+        log::info!("[shutdown] received");
         Ok(())
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        log::info!("[didOpen] uri={} languageId={} version={} text_len={}",
+            params.text_document.uri,
+            params.text_document.language_id,
+            params.text_document.version,
+            params.text_document.text.len(),
+        );
         self.on_change(params.text_document.uri, params.text_document.text)
             .await;
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        log::info!("[didChange] uri={} version={} changes={}",
+            params.text_document.uri,
+            params.text_document.version,
+            params.content_changes.len(),
+        );
         if let Some(change) = params.content_changes.into_iter().last() {
             self.on_change(params.text_document.uri, change.text).await;
         }
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
+        log::info!("[didClose] uri={}", params.text_document.uri);
         self.documents.remove(&params.text_document.uri);
         self.analysis.remove(&params.text_document.uri);
     }
@@ -171,24 +204,32 @@ impl LanguageServer for VbaLanguageServer {
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = &params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
+        log::debug!("[completion] uri={} pos={}:{}", uri, position.line, position.character);
         let items = crate::completion::complete(&self.analysis, uri, position);
+        log::debug!("[completion] returning {} items", items.len());
         Ok(Some(CompletionResponse::Array(items)))
     }
 
     async fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
-        Ok(crate::signature_help::signature_help(
+        log::debug!("[signatureHelp] uri={} pos={}:{}", uri, position.line, position.character);
+        let result = crate::signature_help::signature_help(
             &self.analysis,
             uri,
             position,
-        ))
+        );
+        log::debug!("[signatureHelp] result={}", result.is_some());
+        Ok(result)
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
-        Ok(crate::hover::hover(&self.analysis, uri, position))
+        log::debug!("[hover] uri={} pos={}:{}", uri, position.line, position.character);
+        let result = crate::hover::hover(&self.analysis, uri, position);
+        log::debug!("[hover] result={}", result.is_some());
+        Ok(result)
     }
 
     async fn goto_definition(
@@ -197,11 +238,14 @@ impl LanguageServer for VbaLanguageServer {
     ) -> Result<Option<GotoDefinitionResponse>> {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
-        Ok(crate::definition::goto_definition(
+        log::debug!("[gotoDefinition] uri={} pos={}:{}", uri, position.line, position.character);
+        let result = crate::definition::goto_definition(
             &self.analysis,
             uri,
             position,
-        ))
+        );
+        log::debug!("[gotoDefinition] result={}", result.is_some());
+        Ok(result)
     }
 
     async fn goto_type_definition(
@@ -210,17 +254,22 @@ impl LanguageServer for VbaLanguageServer {
     ) -> Result<Option<GotoDefinitionResponse>> {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
-        Ok(crate::type_definition::goto_type_definition(
+        log::debug!("[gotoTypeDefinition] uri={} pos={}:{}", uri, position.line, position.character);
+        let result = crate::type_definition::goto_type_definition(
             &self.analysis,
             uri,
             position,
-        ))
+        );
+        log::debug!("[gotoTypeDefinition] result={}", result.is_some());
+        Ok(result)
     }
 
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
         let uri = &params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
+        log::debug!("[references] uri={} pos={}:{}", uri, position.line, position.character);
         let locs = crate::references::find_references(&self.analysis, uri, position);
+        log::debug!("[references] found {} locations", locs.len());
         Ok(if locs.is_empty() { None } else { Some(locs) })
     }
 
@@ -228,7 +277,10 @@ impl LanguageServer for VbaLanguageServer {
         let uri = &params.text_document.uri;
         let range = params.range;
         let diags = &params.context.diagnostics;
+        log::debug!("[codeAction] uri={} range={}:{}-{}:{} diags={}",
+            uri, range.start.line, range.start.character, range.end.line, range.end.character, diags.len());
         let actions = crate::code_action::code_actions(&self.analysis, uri, range, diags);
+        log::debug!("[codeAction] returning {} actions", actions.len());
         if actions.is_empty() {
             return Ok(None);
         }
@@ -242,7 +294,9 @@ impl LanguageServer for VbaLanguageServer {
 
     async fn folding_range(&self, params: FoldingRangeParams) -> Result<Option<Vec<FoldingRange>>> {
         let uri = &params.text_document.uri;
+        log::debug!("[foldingRange] uri={}", uri);
         let ranges = crate::folding_range::folding_ranges(&self.analysis, uri);
+        log::debug!("[foldingRange] returning {} ranges", ranges.len());
         Ok(if ranges.is_empty() {
             None
         } else {
@@ -254,7 +308,9 @@ impl LanguageServer for VbaLanguageServer {
         &self,
         params: WorkspaceSymbolParams,
     ) -> Result<Option<Vec<SymbolInformation>>> {
+        log::debug!("[workspaceSymbol] query={:?}", params.query);
         let syms = crate::workspace_symbol::workspace_symbols(&self.analysis, &params.query);
+        log::debug!("[workspaceSymbol] returning {} symbols", syms.len());
         Ok(if syms.is_empty() { None } else { Some(syms) })
     }
 
@@ -264,11 +320,14 @@ impl LanguageServer for VbaLanguageServer {
     ) -> Result<Option<Vec<DocumentHighlight>>> {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
-        Ok(crate::document_highlight::document_highlight(
+        log::debug!("[documentHighlight] uri={} pos={}:{}", uri, position.line, position.character);
+        let result = crate::document_highlight::document_highlight(
             &self.analysis,
             uri,
             position,
-        ))
+        );
+        log::debug!("[documentHighlight] result={:?}", result.as_ref().map(|v| v.len()));
+        Ok(result)
     }
 
     async fn document_symbol(
@@ -276,7 +335,9 @@ impl LanguageServer for VbaLanguageServer {
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
         let uri = &params.text_document.uri;
+        log::debug!("[documentSymbol] uri={}", uri);
         let syms = crate::document_symbol::document_symbols(&self.analysis, uri);
+        log::debug!("[documentSymbol] returning {} symbols", syms.len());
         if syms.is_empty() {
             Ok(None)
         } else {
@@ -288,24 +349,33 @@ impl LanguageServer for VbaLanguageServer {
         let uri = &params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
         let new_name = &params.new_name;
-        Ok(crate::rename::rename(
+        log::debug!("[rename] uri={} pos={}:{} newName={:?}", uri, position.line, position.character, new_name);
+        let result = crate::rename::rename(
             &self.analysis,
             uri,
             position,
             new_name,
-        ))
+        );
+        log::debug!("[rename] result={}", result.is_some());
+        Ok(result)
     }
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let uri = &params.text_document.uri;
+        log::debug!("[formatting] uri={}", uri);
         let src = match self.documents.get(uri) {
             Some(s) => s.clone(),
-            None => return Ok(None),
+            None => {
+                log::debug!("[formatting] document not found");
+                return Ok(None);
+            }
         };
         let formatted = crate::formatting::apply_formatting(&src);
         if formatted == src {
+            log::debug!("[formatting] no changes");
             return Ok(None);
         }
+        log::debug!("[formatting] returning edit (src_len={} → formatted_len={})", src.len(), formatted.len());
         let end = document_end_position(&src);
         Ok(Some(vec![TextEdit::new(
             Range::new(Position::new(0, 0), end),
@@ -315,7 +385,11 @@ impl LanguageServer for VbaLanguageServer {
 
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let uri = &params.text_document.uri;
+        log::debug!("[inlayHint] uri={} range={}:{}-{}:{}",
+            uri, params.range.start.line, params.range.start.character,
+            params.range.end.line, params.range.end.character);
         let hints = self.analysis.inlay_hints(uri, Some(params.range));
+        log::debug!("[inlayHint] returning {} hints", hints.len());
         Ok(Some(hints))
     }
 
@@ -324,7 +398,10 @@ impl LanguageServer for VbaLanguageServer {
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
         let uri = &params.text_document.uri;
-        Ok(crate::semantic_tokens::semantic_tokens(&self.analysis, uri))
+        log::debug!("[semanticTokensFull] uri={}", uri);
+        let result = crate::semantic_tokens::semantic_tokens(&self.analysis, uri);
+        log::debug!("[semanticTokensFull] result={}", result.is_some());
+        Ok(result)
     }
 
     async fn prepare_call_hierarchy(
@@ -333,7 +410,10 @@ impl LanguageServer for VbaLanguageServer {
     ) -> Result<Option<Vec<CallHierarchyItem>>> {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
-        Ok(self.analysis.prepare_call_hierarchy(uri, position))
+        log::debug!("[prepareCallHierarchy] uri={} pos={}:{}", uri, position.line, position.character);
+        let result = self.analysis.prepare_call_hierarchy(uri, position);
+        log::debug!("[prepareCallHierarchy] result={:?}", result.as_ref().map(|v| v.len()));
+        Ok(result)
     }
 
     async fn incoming_calls(
@@ -341,7 +421,9 @@ impl LanguageServer for VbaLanguageServer {
         params: CallHierarchyIncomingCallsParams,
     ) -> Result<Option<Vec<CallHierarchyIncomingCall>>> {
         let item = &params.item;
+        log::debug!("[incomingCalls] item={:?}", item.name);
         let calls = self.analysis.incoming_calls(item);
+        log::debug!("[incomingCalls] returning {} calls", calls.len());
         Ok(if calls.is_empty() { None } else { Some(calls) })
     }
 
@@ -350,7 +432,9 @@ impl LanguageServer for VbaLanguageServer {
         params: CallHierarchyOutgoingCallsParams,
     ) -> Result<Option<Vec<CallHierarchyOutgoingCall>>> {
         let item = &params.item;
+        log::debug!("[outgoingCalls] item={:?}", item.name);
         let calls = self.analysis.outgoing_calls(item);
+        log::debug!("[outgoingCalls] returning {} calls", calls.len());
         Ok(if calls.is_empty() { None } else { Some(calls) })
     }
 }

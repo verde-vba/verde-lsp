@@ -58,13 +58,28 @@ impl AnalysisHost {
     /// Read `path`, parse as `WorkbookContext` JSON, and update the context.
     /// Returns `true` on success, `false` if the file is missing or invalid.
     pub fn reload_workbook_context_from_path(&self, path: &std::path::Path) -> bool {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            if let Ok(ctx) = serde_json::from_str::<WorkbookContext>(&content) {
-                self.set_workbook_context(ctx);
-                return true;
+        log::info!("[analysis:reload_workbook_context] path={:?}", path);
+        match std::fs::read_to_string(path) {
+            Ok(content) => {
+                log::debug!("[analysis:reload_workbook_context] read {} bytes", content.len());
+                match serde_json::from_str::<WorkbookContext>(&content) {
+                    Ok(ctx) => {
+                        log::info!("[analysis:reload_workbook_context] loaded — sheets={} tables={} named_ranges={}",
+                            ctx.sheets.len(), ctx.tables.len(), ctx.named_ranges.len());
+                        self.set_workbook_context(ctx);
+                        true
+                    }
+                    Err(e) => {
+                        log::warn!("[analysis:reload_workbook_context] JSON parse error: {}", e);
+                        false
+                    }
+                }
+            }
+            Err(e) => {
+                log::debug!("[analysis:reload_workbook_context] file read failed: {}", e);
+                false
             }
         }
-        false
     }
 
     fn read_workbook_context(&self) -> std::sync::RwLockReadGuard<'_, WorkbookContext> {
@@ -97,6 +112,8 @@ impl AnalysisHost {
 
     pub fn update(&self, uri: Url, source: String, parse_result: ParseResult) {
         let symbols = symbols::build_symbol_table(&parse_result.ast);
+        log::debug!("[analysis:update] uri={} source_len={} errors={} symbols={} tokens={}",
+            uri, source.len(), parse_result.errors.len(), symbols.symbols.len(), parse_result.tokens.len());
         let tokens = parse_result.tokens.clone();
         self.files.insert(
             uri,
@@ -107,13 +124,16 @@ impl AnalysisHost {
                 tokens,
             },
         );
+        log::debug!("[analysis:update] total files tracked: {}", self.files.len());
     }
 
     pub fn remove(&self, uri: &Url) {
+        log::debug!("[analysis:remove] uri={}", uri);
         self.files.remove(uri);
     }
 
     pub fn diagnostics(&self, uri: &Url) -> Vec<Diagnostic> {
+        log::debug!("[analysis:diagnostics] uri={} file_exists={}", uri, self.files.contains_key(uri));
         if let Some(file) = self.files.get(uri) {
             // Single iteration over all files to collect both public symbol names
             // and module names from other files.
