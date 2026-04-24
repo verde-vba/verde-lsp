@@ -131,6 +131,10 @@ pub enum Token {
     #[token("Declare", ignore(ascii_case))]
     Declare,
 
+    // File number prefix (e.g. `#fileNum` in `Open … As #fileNum`)
+    #[token("#")]
+    Hash,
+
     // Conditional compilation
     #[token("#If", ignore(ascii_case))]
     HashIf,
@@ -243,7 +247,7 @@ pub enum Token {
     Colon,
     #[token(";")]
     Semicolon,
-    #[regex(r"_[ \t]*\n")]
+    #[regex(r"_[ \t]*\r?\n")]
     LineContinuation,
 
     // Literals
@@ -459,6 +463,16 @@ mod tests {
         assert_eq!(tokens[2].token, Token::Identifier);
     }
 
+    #[test]
+    fn lex_line_continuation_crlf() {
+        let (tokens, errors) = lex("x _\r\ny");
+        assert!(errors.is_empty(), "expected no lex errors, got: {:?}", errors);
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0].token, Token::Identifier);
+        assert_eq!(tokens[1].token, Token::LineContinuation);
+        assert_eq!(tokens[2].token, Token::Identifier);
+    }
+
     // ── Delimiters ───────────────────────────────────────────────────
 
     #[test]
@@ -511,6 +525,16 @@ mod tests {
     }
 
     // ── Span correctness ─────────────────────────────────────────────
+
+    #[test]
+    fn lex_hash_file_number() {
+        let (tokens, errors) = lex("Open f For Append As #fileNum");
+        assert!(errors.is_empty(), "expected no lex errors, got: {:?}", errors);
+        assert!(
+            tokens.iter().any(|t| t.token == Token::Hash && t.text.as_str() == "#"),
+            "expected a Hash token for '#'"
+        );
+    }
 
     #[test]
     fn lex_span_covers_token_text() {
