@@ -411,3 +411,97 @@ End Sub"#,
         "parameters with error handling, Debug, and Err",
     );
 }
+
+#[test]
+fn does_not_warn_on_multiline_params_with_crlf() {
+    // Windows \r\n line endings with line continuations
+    assert_no_diagnostics(
+        "Option Explicit\r\nPublic Sub WriteLog( _\r\n    ByVal logFilePath As String, _\r\n    ByVal message As String _\r\n)\r\n    Dim x As Long\r\n    x = Len(logFilePath) + Len(message)\r\nEnd Sub",
+        "multiline params with CRLF should not flag parameters as undeclared",
+    );
+}
+
+#[test]
+fn does_not_warn_on_vba_file_io_keywords() {
+    assert_no_diagnostics(
+        r#"Option Explicit
+Sub WriteLog()
+    Dim fileNum As Integer
+    Dim msg As String
+    msg = "hello"
+    fileNum = FreeFile
+    Open "C:\log.txt" For Append As fileNum
+    Print fileNum, msg
+    Close fileNum
+End Sub"#,
+        "Open, Print, Close are VBA file I/O keywords",
+    );
+}
+
+#[test]
+fn does_not_warn_on_vba_constants() {
+    assert_no_diagnostics(
+        r#"Option Explicit
+Sub Demo()
+    Dim msg As String
+    msg = "hello" & vbCrLf & vbTab & "world"
+    MsgBox msg, vbYesNo + vbQuestion
+End Sub"#,
+        "vbCrLf, vbTab, vbYesNo, vbQuestion are VBA constants",
+    );
+}
+
+#[test]
+fn does_not_warn_on_vba_msgbox_constants() {
+    assert_no_diagnostics(
+        r#"Option Explicit
+Sub Demo()
+    Dim result As Long
+    result = MsgBox("OK?", vbExclamation)
+    result = MsgBox("OK?", vbInformation)
+    result = MsgBox("OK?", vbCritical)
+    If result = vbYes Then
+        MsgBox "yes"
+    End If
+End Sub"#,
+        "vbExclamation, vbInformation, vbCritical, vbYes are VBA constants",
+    );
+}
+
+#[test]
+fn does_not_warn_on_createobject() {
+    assert_no_diagnostics(
+        r#"Option Explicit
+Sub Demo()
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+End Sub"#,
+        "CreateObject is a VBA built-in function",
+    );
+}
+
+#[test]
+fn does_not_warn_on_mkdir() {
+    assert_no_diagnostics(
+        r#"Option Explicit
+Sub Demo()
+    MkDir "C:\temp\test"
+End Sub"#,
+        "MkDir is a VBA built-in function",
+    );
+}
+
+#[test]
+fn does_not_warn_on_excel_direction_constants() {
+    assert_no_diagnostics(
+        r#"Option Explicit
+Sub Demo()
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    Dim lastCol As Long
+    lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+End Sub"#,
+        "xlUp and xlToLeft are Excel enum constants",
+    );
+}
