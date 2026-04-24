@@ -127,171 +127,11 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
         match &ast.nodes[node_id] {
             AstNode::Procedure(proc) => {
                 proc_ranges.push((proc.name.clone(), proc.span));
-
-                let kind = match proc.kind {
-                    ProcedureKind::Sub => SymbolKind::Procedure,
-                    ProcedureKind::Function => SymbolKind::Function,
-                    _ => SymbolKind::Property,
-                };
-                symbols.push(Symbol {
-                    name: proc.name.clone(),
-                    kind,
-                    type_name: proc.return_type.clone(),
-                    visibility: proc.visibility.clone(),
-                    span: proc.name_span,
-                    detail: SymbolDetail::Procedure {
-                        kind: proc.kind.clone(),
-                        params: proc
-                            .params
-                            .iter()
-                            .filter_map(|&id| {
-                                if let AstNode::Parameter(p) = &ast.nodes[id] {
-                                    Some(ParameterInfo {
-                                        name: p.name.clone(),
-                                        type_name: p.type_name.clone(),
-                                        passing: p.passing.clone(),
-                                        is_optional: p.is_optional,
-                                    })
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect(),
-                        return_type: proc.return_type.clone(),
-                    },
-                    proc_scope: None,
-                });
-                for &param_id in &proc.params {
-                    if let AstNode::Parameter(p) = &ast.nodes[param_id] {
-                        symbols.push(Symbol {
-                            name: p.name.clone(),
-                            kind: SymbolKind::Parameter,
-                            type_name: p.type_name.clone(),
-                            visibility: Visibility::Private,
-                            span: p.span,
-                            detail: SymbolDetail::Parameter {
-                                type_name: p.type_name.clone(),
-                                passing: p.passing.clone(),
-                                is_optional: p.is_optional,
-                            },
-                            proc_scope: Some(proc.name.clone()),
-                        });
-                    }
-                }
-                for &stmt_id in &proc.body {
-                    if let AstNode::Statement(StatementNode::LocalDeclaration(decl)) =
-                        &ast.nodes[stmt_id]
-                    {
-                        let is_const = decl.kind == DeclKind::Const;
-                        let is_static = decl.kind == DeclKind::Static;
-                        for (name, type_name, name_span) in &decl.names {
-                            symbols.push(Symbol {
-                                name: name.clone(),
-                                kind: if is_const {
-                                    SymbolKind::Constant
-                                } else {
-                                    SymbolKind::Variable
-                                },
-                                type_name: type_name.clone(),
-                                visibility: Visibility::Private,
-                                span: *name_span,
-                                detail: SymbolDetail::Variable { is_static },
-                                proc_scope: Some(proc.name.clone()),
-                            });
-                        }
-                    }
-                }
+                push_procedure_symbols(&mut symbols, proc, ast);
             }
-            AstNode::Variable(var) => {
-                let kind = if var.is_const {
-                    SymbolKind::Constant
-                } else {
-                    SymbolKind::Variable
-                };
-                symbols.push(Symbol {
-                    name: var.name.clone(),
-                    kind,
-                    type_name: var.type_name.clone(),
-                    visibility: var.visibility.clone(),
-                    span: var.span,
-                    detail: SymbolDetail::Variable {
-                        is_static: var.is_static,
-                    },
-                    proc_scope: None,
-                });
-            }
-            AstNode::TypeDef(td) => {
-                symbols.push(Symbol {
-                    name: td.name.clone(),
-                    kind: SymbolKind::TypeDef,
-                    type_name: None,
-                    visibility: td.visibility.clone(),
-                    span: td.span,
-                    detail: SymbolDetail::TypeDef {
-                        members: td
-                            .members
-                            .iter()
-                            .map(|(n, t, _)| (n.clone(), t.clone()))
-                            .collect(),
-                    },
-                    proc_scope: None,
-                });
-                for (member_name, member_type, member_span) in &td.members {
-                    symbols.push(Symbol {
-                        name: member_name.clone(),
-                        kind: SymbolKind::UdtMember,
-                        type_name: member_type.clone(),
-                        visibility: td.visibility.clone(),
-                        span: *member_span,
-                        detail: SymbolDetail::UdtMember {
-                            parent_type: td.name.clone(),
-                            type_name: member_type
-                                .clone()
-                                .unwrap_or_else(|| SmolStr::new("Variant")),
-                        },
-                        proc_scope: None,
-                    });
-                }
-            }
-            AstNode::EnumDef(ed) => {
-                symbols.push(Symbol {
-                    name: ed.name.clone(),
-                    kind: SymbolKind::EnumDef,
-                    type_name: None,
-                    visibility: ed.visibility.clone(),
-                    span: ed.span,
-                    detail: SymbolDetail::EnumDef {
-                        members: ed.members.clone(),
-                    },
-                    proc_scope: None,
-                });
-                let mut next_value: i64 = 0;
-                for (member_name, value) in &ed.members {
-                    let resolved = match value {
-                        Some(v) => {
-                            next_value = v + 1;
-                            *v
-                        }
-                        None => {
-                            let implicit = next_value;
-                            next_value += 1;
-                            implicit
-                        }
-                    };
-                    symbols.push(Symbol {
-                        name: member_name.clone(),
-                        kind: SymbolKind::EnumMember,
-                        type_name: Some(ed.name.clone()),
-                        visibility: ed.visibility.clone(),
-                        span: ed.span,
-                        detail: SymbolDetail::EnumMember {
-                            parent_enum: ed.name.clone(),
-                            value: resolved,
-                        },
-                        proc_scope: None,
-                    });
-                }
-            }
+            AstNode::Variable(var) => push_variable_symbol(&mut symbols, var),
+            AstNode::TypeDef(td) => push_typedef_symbols(&mut symbols, td),
+            AstNode::EnumDef(ed) => push_enumdef_symbols(&mut symbols, ed),
             _ => {}
         }
     }
@@ -309,6 +149,177 @@ pub fn build_symbol_table(ast: &Ast) -> SymbolTable {
         proc_ranges,
         block_ranges,
         implements: ast.implements.clone(),
+    }
+}
+
+/// Emit the procedure symbol plus its parameter and local-declaration symbols.
+fn push_procedure_symbols(symbols: &mut Vec<Symbol>, proc: &ProcedureNode, ast: &Ast) {
+    let kind = match proc.kind {
+        ProcedureKind::Sub => SymbolKind::Procedure,
+        ProcedureKind::Function => SymbolKind::Function,
+        _ => SymbolKind::Property,
+    };
+    symbols.push(Symbol {
+        name: proc.name.clone(),
+        kind,
+        type_name: proc.return_type.clone(),
+        visibility: proc.visibility.clone(),
+        span: proc.name_span,
+        detail: SymbolDetail::Procedure {
+            kind: proc.kind.clone(),
+            params: proc
+                .params
+                .iter()
+                .filter_map(|&id| {
+                    if let AstNode::Parameter(p) = &ast.nodes[id] {
+                        Some(ParameterInfo {
+                            name: p.name.clone(),
+                            type_name: p.type_name.clone(),
+                            passing: p.passing.clone(),
+                            is_optional: p.is_optional,
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            return_type: proc.return_type.clone(),
+        },
+        proc_scope: None,
+    });
+    for &param_id in &proc.params {
+        if let AstNode::Parameter(p) = &ast.nodes[param_id] {
+            symbols.push(Symbol {
+                name: p.name.clone(),
+                kind: SymbolKind::Parameter,
+                type_name: p.type_name.clone(),
+                visibility: Visibility::Private,
+                span: p.span,
+                detail: SymbolDetail::Parameter {
+                    type_name: p.type_name.clone(),
+                    passing: p.passing.clone(),
+                    is_optional: p.is_optional,
+                },
+                proc_scope: Some(proc.name.clone()),
+            });
+        }
+    }
+    for &stmt_id in &proc.body {
+        if let AstNode::Statement(StatementNode::LocalDeclaration(decl)) = &ast.nodes[stmt_id] {
+            let is_const = decl.kind == DeclKind::Const;
+            let is_static = decl.kind == DeclKind::Static;
+            for (name, type_name, name_span) in &decl.names {
+                symbols.push(Symbol {
+                    name: name.clone(),
+                    kind: if is_const {
+                        SymbolKind::Constant
+                    } else {
+                        SymbolKind::Variable
+                    },
+                    type_name: type_name.clone(),
+                    visibility: Visibility::Private,
+                    span: *name_span,
+                    detail: SymbolDetail::Variable { is_static },
+                    proc_scope: Some(proc.name.clone()),
+                });
+            }
+        }
+    }
+}
+
+fn push_variable_symbol(symbols: &mut Vec<Symbol>, var: &VariableNode) {
+    let kind = if var.is_const {
+        SymbolKind::Constant
+    } else {
+        SymbolKind::Variable
+    };
+    symbols.push(Symbol {
+        name: var.name.clone(),
+        kind,
+        type_name: var.type_name.clone(),
+        visibility: var.visibility.clone(),
+        span: var.span,
+        detail: SymbolDetail::Variable {
+            is_static: var.is_static,
+        },
+        proc_scope: None,
+    });
+}
+
+/// Emit the TypeDef symbol and one UdtMember symbol per field.
+fn push_typedef_symbols(symbols: &mut Vec<Symbol>, td: &TypeDefNode) {
+    symbols.push(Symbol {
+        name: td.name.clone(),
+        kind: SymbolKind::TypeDef,
+        type_name: None,
+        visibility: td.visibility.clone(),
+        span: td.span,
+        detail: SymbolDetail::TypeDef {
+            members: td
+                .members
+                .iter()
+                .map(|(n, t, _)| (n.clone(), t.clone()))
+                .collect(),
+        },
+        proc_scope: None,
+    });
+    for (member_name, member_type, member_span) in &td.members {
+        symbols.push(Symbol {
+            name: member_name.clone(),
+            kind: SymbolKind::UdtMember,
+            type_name: member_type.clone(),
+            visibility: td.visibility.clone(),
+            span: *member_span,
+            detail: SymbolDetail::UdtMember {
+                parent_type: td.name.clone(),
+                type_name: member_type
+                    .clone()
+                    .unwrap_or_else(|| SmolStr::new("Variant")),
+            },
+            proc_scope: None,
+        });
+    }
+}
+
+/// Emit the EnumDef symbol and one EnumMember symbol per case, resolving
+/// implicit values (each unspecified member takes the previous value + 1).
+fn push_enumdef_symbols(symbols: &mut Vec<Symbol>, ed: &EnumDefNode) {
+    symbols.push(Symbol {
+        name: ed.name.clone(),
+        kind: SymbolKind::EnumDef,
+        type_name: None,
+        visibility: ed.visibility.clone(),
+        span: ed.span,
+        detail: SymbolDetail::EnumDef {
+            members: ed.members.clone(),
+        },
+        proc_scope: None,
+    });
+    let mut next_value: i64 = 0;
+    for (member_name, value) in &ed.members {
+        let resolved = match value {
+            Some(v) => {
+                next_value = v + 1;
+                *v
+            }
+            None => {
+                let implicit = next_value;
+                next_value += 1;
+                implicit
+            }
+        };
+        symbols.push(Symbol {
+            name: member_name.clone(),
+            kind: SymbolKind::EnumMember,
+            type_name: Some(ed.name.clone()),
+            visibility: ed.visibility.clone(),
+            span: ed.span,
+            detail: SymbolDetail::EnumMember {
+                parent_enum: ed.name.clone(),
+                value: resolved,
+            },
+            proc_scope: None,
+        });
     }
 }
 
