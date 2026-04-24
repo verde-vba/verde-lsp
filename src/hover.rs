@@ -8,12 +8,17 @@ use crate::parser::ast::ProcedureKind;
 
 pub fn hover(host: &AnalysisHost, uri: &Url, position: Position) -> Option<Hover> {
     // Dot-access: if cursor is on the right side of `obj.Member`, resolve the member.
+    // First try local UDT/type members, then cross-module (`Utils.Func`).
     if let Some(hover) = host
         .with_source(uri, |symbols, source| {
             hover_dot_member(symbols, source, position)
         })
         .flatten()
     {
+        return Some(hover);
+    }
+    // Cross-module dot-access: `ModuleName.Member` where ModuleName is a .bas/.cls file.
+    if let Some(hover) = hover_dot_module(host, uri, position) {
         return Some(hover);
     }
 
@@ -52,8 +57,16 @@ pub fn hover(host: &AnalysisHost, uri: &Url, position: Position) -> Option<Hover
     let word = host.with_source(uri, |_, source| {
         resolve::find_word_at_position(source, position)
     })??;
-    let (_other_uri, sym) = host.find_public_symbol_in_other_files(uri, &word)?;
-    Some(symbol_to_hover(&sym))
+    if let Some((_other_uri, sym)) = host.find_public_symbol_in_other_files(uri, &word) {
+        return Some(symbol_to_hover(&sym));
+    }
+
+    // Fallback: module name (e.g. `Utils` in `Utils.SomeFunction`)
+    if let Some((_mod_uri, public_syms)) = host.find_module_by_name(uri, &word) {
+        return Some(module_to_hover(&word, &public_syms));
+    }
+
+    None
 }
 
 /// Resolve the member on the right side of a dot access for hover.
@@ -141,6 +154,56 @@ fn hover_dot_member(
     }
 
     None
+}
+
+/// Cross-module dot-access hover: `ModuleName.Member` where cursor is on `Member`.
+/// Resolves `ModuleName` as a filename stem and looks up `Member` in that module's
+/// public symbols.
+fn hover_dot_module(host: &AnalysisHost, uri: &Url, position: Position) -> Option<Hover> {
+    let (var_name, member_name) = host.with_source(uri, |_symbols, source| {
+        let offset = resolve::position_to_offset(source, position)?;
+        let (var, _partial) = resolve::parse_dot_access_at(source, offset)?;
+        let word = resolve::find_word_at_position(source, position)?;
+        Some((var, word))
+    })??;
+
+    let (_mod_uri, public_syms) = host.find_module_by_name(uri, &var_name)?;
+    let sym = public_syms
+        .iter()
+        .find(|s| s.name.eq_ignore_ascii_case(&member_name))?;
+    Some(symbol_to_hover(sym))
+}
+
+/// Build a hover tooltip summarising a module's public API.
+fn module_to_hover(module_name: &str, public_syms: &[Symbol]) -> Hover {
+    let mut lines = Vec::new();
+    lines.push(format!("**Module** `{module_name}`"));
+    if !public_syms.is_empty() {
+        lines.push(String::new());
+        let subs: Vec<_> = public_syms
+            .iter()
+            .filter(|s| matches!(s.kind, SymbolKind::Procedure | SymbolKind::Function | SymbolKind::Property))
+            .collect();
+        let consts: Vec<_> = public_syms
+            .iter()
+            .filter(|s| matches!(s.kind, SymbolKind::Constant | SymbolKind::Variable))
+            .collect();
+        if !subs.is_empty() {
+            let names: Vec<_> = subs.iter().map(|s| s.name.as_str()).collect();
+            lines.push(format!("Procedures: {}", names.join(", ")));
+        }
+        if !consts.is_empty() {
+            let names: Vec<_> = consts.iter().map(|s| s.name.as_str()).collect();
+            lines.push(format!("Constants/Variables: {}", names.join(", ")));
+        }
+    }
+    Hover {
+        contents: HoverContents::Markup(MarkupContent {
+            kind: MarkupKind::Markdown,
+            value: lines.join("\n"),
+        }),
+        range: None,
+    }
 }
 
 fn symbol_to_hover(sym: &Symbol) -> Hover {

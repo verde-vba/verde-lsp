@@ -133,7 +133,8 @@ impl AnalysisHost {
     }
 
     pub fn diagnostics(&self, uri: &Url) -> Vec<Diagnostic> {
-        log::debug!("[analysis:diagnostics] uri={} file_exists={}", uri, self.files.contains_key(uri));
+        let total_files = self.files.len();
+        log::debug!("[analysis:diagnostics] uri={} file_exists={} total_files={}", uri, self.files.contains_key(uri), total_files);
         if let Some(file) = self.files.get(uri) {
             // Single iteration over all files to collect both public symbol names
             // and module names from other files.
@@ -162,12 +163,19 @@ impl AnalysisHost {
                     cross_module_names.insert(smol_str::SmolStr::new(name.to_ascii_lowercase()));
                 }
             }
-            diagnostics::compute(
+            log::debug!("[analysis:diagnostics] cross_module_names({})={:?}", cross_module_names.len(), cross_module_names);
+            let diags = diagnostics::compute(
                 &file.parse_result,
                 &file.symbols,
                 &file.source,
                 &cross_module_names,
-            )
+            );
+            if !diags.is_empty() {
+                for d in &diags {
+                    log::debug!("[analysis:diagnostics] diag: {} @ {:?}", d.message, d.range);
+                }
+            }
+            diags
         } else {
             Vec::new()
         }
@@ -308,6 +316,41 @@ impl AnalysisHost {
                     && s.name.eq_ignore_ascii_case(name)
             }) {
                 return Some((entry.key().clone(), sym.clone()));
+            }
+        }
+        None
+    }
+
+    /// Find the file whose module name (filename stem) matches `name`
+    /// (case-insensitive), excluding `current_uri`. Returns the URI and
+    /// the public symbol list. Used for module-name hover / definition.
+    pub fn find_module_by_name(
+        &self,
+        current_uri: &Url,
+        name: &str,
+    ) -> Option<(Url, Vec<symbols::Symbol>)> {
+        for entry in self.files.iter() {
+            if entry.key() == current_uri {
+                continue;
+            }
+            let stem = entry
+                .key()
+                .path_segments()
+                .and_then(|mut s| s.next_back())
+                .and_then(|f| f.split('.').next())
+                .unwrap_or("");
+            if stem.eq_ignore_ascii_case(name) {
+                let public_syms: Vec<symbols::Symbol> = entry
+                    .symbols
+                    .symbols
+                    .iter()
+                    .filter(|s| {
+                        s.visibility == crate::parser::ast::Visibility::Public
+                            && s.proc_scope.is_none()
+                    })
+                    .cloned()
+                    .collect();
+                return Some((entry.key().clone(), public_syms));
             }
         }
         None

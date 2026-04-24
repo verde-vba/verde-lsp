@@ -50,6 +50,33 @@ fn goto_def_dot_member(
     )))
 }
 
+/// Cross-module dot-access: `ModuleName.Member` where cursor is on `Member`.
+/// Resolves `ModuleName` as a filename stem and jumps to `Member`'s definition
+/// in that module.
+fn goto_def_dot_module(
+    host: &AnalysisHost,
+    uri: &Url,
+    position: Position,
+) -> Option<GotoDefinitionResponse> {
+    let (var_name, member_name) = host.with_source(uri, |_symbols, source| {
+        let offset = resolve::position_to_offset(source, position)?;
+        let (var, _partial) = resolve::parse_dot_access_at(source, offset)?;
+        let word = resolve::find_word_at_position(source, position)?;
+        Some((var, word))
+    })??;
+
+    let (mod_uri, public_syms) = host.find_module_by_name(uri, &var_name)?;
+    let sym = public_syms
+        .iter()
+        .find(|s| s.name.eq_ignore_ascii_case(&member_name))?;
+    let range = host.with_source(&mod_uri, |_, source| {
+        resolve::text_range_to_lsp_range(source, sym.span)
+    })?;
+    Some(GotoDefinitionResponse::Scalar(Location::new(
+        mod_uri, range,
+    )))
+}
+
 pub fn goto_definition(
     host: &AnalysisHost,
     uri: &Url,
@@ -62,6 +89,10 @@ pub fn goto_definition(
         })
         .flatten()
     {
+        return Some(response);
+    }
+    // Cross-module dot-access: `ModuleName.Member` → jump to Member in that module.
+    if let Some(response) = goto_def_dot_module(host, uri, position) {
         return Some(response);
     }
 
@@ -107,11 +138,22 @@ pub fn goto_definition(
     let word = host.with_source(uri, |_, source| {
         resolve::find_word_at_position(source, position)
     })??;
-    let (other_uri, sym) = host.find_public_symbol_in_other_files(uri, &word)?;
-    let range = host.with_source(&other_uri, |_, source| {
-        resolve::text_range_to_lsp_range(source, sym.span)
-    })?;
-    Some(GotoDefinitionResponse::Scalar(Location::new(
-        other_uri, range,
-    )))
+    if let Some((other_uri, sym)) = host.find_public_symbol_in_other_files(uri, &word) {
+        let range = host.with_source(&other_uri, |_, source| {
+            resolve::text_range_to_lsp_range(source, sym.span)
+        })?;
+        return Some(GotoDefinitionResponse::Scalar(Location::new(
+            other_uri, range,
+        )));
+    }
+
+    // Fallback: module name (e.g. `Utils` → jump to Utils.bas top)
+    if let Some((mod_uri, _public_syms)) = host.find_module_by_name(uri, &word) {
+        let range = Range::new(Position::new(0, 0), Position::new(0, 0));
+        return Some(GotoDefinitionResponse::Scalar(Location::new(
+            mod_uri, range,
+        )));
+    }
+
+    None
 }

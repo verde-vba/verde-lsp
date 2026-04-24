@@ -23,6 +23,85 @@ impl VbaLanguageServer {
         }
     }
 
+    /// Scan the workspace root for `.bas`, `.cls`, `.frm` files and load
+    /// each into `AnalysisHost` from disk. Files already opened by the
+    /// client (present in `documents`) are skipped — the editor version
+    /// takes precedence.
+    fn load_workspace_files(&self, root: &std::path::Path) {
+        const VBA_EXTENSIONS: &[&str] = &["bas", "cls", "frm"];
+
+        let entries = match std::fs::read_dir(root) {
+            Ok(entries) => entries,
+            Err(e) => {
+                log::warn!("[load_workspace_files] failed to read dir {:?}: {}", root, e);
+                return;
+            }
+        };
+
+        let mut count = 0u32;
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
+            if !VBA_EXTENSIONS.iter().any(|&v| v.eq_ignore_ascii_case(ext)) {
+                continue;
+            }
+            if let Ok(uri) = Url::from_file_path(&path) {
+                if self.documents.contains_key(&uri) {
+                    continue; // client-managed — skip
+                }
+                if self.load_file_from_disk(&uri, &path) {
+                    count += 1;
+                }
+            }
+        }
+        log::info!("[load_workspace_files] loaded {} VBA files from {:?}", count, root);
+    }
+
+    /// Read a single file from disk, parse it, and store the result in
+    /// `AnalysisHost`. Does NOT insert into `documents` (reserved for
+    /// client-opened files) and does NOT publish diagnostics.
+    ///
+    /// VBA modules exported from Japanese Excel are often encoded in
+    /// Shift-JIS (CP932).  We try UTF-8 first and fall back to Shift-JIS
+    /// so cross-module features work regardless of the source encoding.
+    fn load_file_from_disk(&self, uri: &Url, path: &std::path::Path) -> bool {
+        let bytes = match std::fs::read(path) {
+            Ok(b) => b,
+            Err(e) => {
+                log::warn!("[load_file_from_disk] failed to read {:?}: {}", path, e);
+                return false;
+            }
+        };
+
+        let text = match String::from_utf8(bytes.clone()) {
+            Ok(s) => s,
+            Err(_) => {
+                // Fallback: try Shift-JIS (common for Japanese VBA exports).
+                let (decoded, _encoding, had_errors) =
+                    encoding_rs::SHIFT_JIS.decode(&bytes);
+                if had_errors {
+                    log::warn!(
+                        "[load_file_from_disk] {:?}: not valid UTF-8 or Shift-JIS, using lossy decode",
+                        path
+                    );
+                }
+                log::debug!("[load_file_from_disk] {:?}: decoded as Shift-JIS", path);
+                decoded.into_owned()
+            }
+        };
+
+        let parse_result = parser::parse(&text);
+        self.analysis.update(uri.clone(), text, parse_result);
+        log::debug!("[load_file_from_disk] loaded {:?}", path);
+        true
+    }
+
     async fn on_change(&self, uri: Url, text: String) {
         log::debug!("[on_change] uri={} text_len={}", uri, text.len());
         let parse_result = parser::parse(&text);
@@ -129,6 +208,10 @@ impl LanguageServer for VbaLanguageServer {
             if let Ok(base) = root.to_file_path() {
                 self.analysis
                     .reload_workbook_context_from_path(&base.join("workbook-context.json"));
+                // Scan workspace for VBA files and load them into analysis
+                // so cross-module features work even before the client opens
+                // each file in an editor tab.
+                self.load_workspace_files(&base);
             }
             // Register a file watcher so clients notify us when workbook-context.json changes.
             let _ = self
@@ -196,9 +279,22 @@ impl LanguageServer for VbaLanguageServer {
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
-        log::info!("[didClose] uri={}", params.text_document.uri);
-        self.documents.remove(&params.text_document.uri);
-        self.analysis.remove(&params.text_document.uri);
+        let uri = params.text_document.uri;
+        log::info!("[didClose] uri={}", uri);
+        self.documents.remove(&uri);
+
+        // Fall back to the on-disk version so cross-module features
+        // (completion, references, go-to-definition) keep working for
+        // symbols defined in this file.
+        if let Ok(path) = uri.to_file_path() {
+            if self.load_file_from_disk(&uri, &path) {
+                log::info!("[didClose] fell back to disk version for {}", uri);
+                return;
+            }
+        }
+        // Disk read failed (file deleted?) — remove from analysis.
+        log::info!("[didClose] disk fallback failed, removing {}", uri);
+        self.analysis.remove(&uri);
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
