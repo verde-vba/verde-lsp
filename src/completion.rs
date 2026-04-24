@@ -1,9 +1,8 @@
 use tower_lsp::lsp_types::*;
 
 use crate::analysis::resolve::{parse_dot_access_at, position_to_offset};
-use crate::analysis::symbols::{SymbolDetail, SymbolKind, SymbolTable};
+use crate::analysis::symbols::{Symbol, SymbolDetail, SymbolKind, SymbolTable};
 use crate::analysis::AnalysisHost;
-use crate::excel_model::types::builtin_types;
 use crate::vba_builtins;
 
 fn symbol_kind_to_completion_kind(kind: &SymbolKind) -> CompletionItemKind {
@@ -19,6 +18,31 @@ fn symbol_kind_to_completion_kind(kind: &SymbolKind) -> CompletionItemKind {
         SymbolKind::EnumMember => CompletionItemKind::ENUM_MEMBER,
         SymbolKind::UdtMember => CompletionItemKind::FIELD,
     }
+}
+
+fn symbol_completion_item(s: &Symbol, kind: CompletionItemKind) -> CompletionItem {
+    CompletionItem {
+        label: s.name.to_string(),
+        kind: Some(kind),
+        detail: s.type_name.as_ref().map(|t| t.to_string()),
+        ..Default::default()
+    }
+}
+
+fn collect_matching<F>(
+    symbols: &SymbolTable,
+    kind: CompletionItemKind,
+    predicate: F,
+) -> Vec<CompletionItem>
+where
+    F: Fn(&Symbol) -> bool,
+{
+    symbols
+        .symbols
+        .iter()
+        .filter(|s| predicate(s))
+        .map(|s| symbol_completion_item(s, kind))
+        .collect()
 }
 
 pub fn complete(host: &AnalysisHost, uri: &Url, position: Position) -> Vec<CompletionItem> {
@@ -182,36 +206,20 @@ fn complete_dot_access(
                             | SymbolKind::Constant
                     )
             })
-            .map(|s| CompletionItem {
-                label: s.name.to_string(),
-                kind: Some(symbol_kind_to_completion_kind(&s.kind)),
-                detail: s.type_name.as_ref().map(|t| t.to_string()),
-                ..Default::default()
-            })
+            .map(|s| symbol_completion_item(s, symbol_kind_to_completion_kind(&s.kind)))
             .collect();
         return Some(items);
     }
 
     // Check if var_name is an Enum name → offer its members directly (e.g. Color.Red)
-    let enum_members: Vec<CompletionItem> = symbols
-        .symbols
-        .iter()
-        .filter(|s| {
-            matches!(s.kind, SymbolKind::EnumMember)
-                && match &s.detail {
-                    SymbolDetail::EnumMember { parent_enum, .. } => {
-                        parent_enum.eq_ignore_ascii_case(&var_name)
-                    }
-                    _ => false,
-                }
-        })
-        .map(|s| CompletionItem {
-            label: s.name.to_string(),
-            kind: Some(CompletionItemKind::ENUM_MEMBER),
-            detail: s.type_name.as_ref().map(|t| t.to_string()),
-            ..Default::default()
-        })
-        .collect();
+    let enum_members = collect_matching(symbols, CompletionItemKind::ENUM_MEMBER, |s| {
+        matches!(s.kind, SymbolKind::EnumMember)
+            && matches!(
+                &s.detail,
+                SymbolDetail::EnumMember { parent_enum, .. }
+                    if parent_enum.eq_ignore_ascii_case(&var_name)
+            )
+    });
 
     if !enum_members.is_empty() {
         return Some(enum_members);
@@ -220,77 +228,8 @@ fn complete_dot_access(
     // Prefer proc-scoped variable over module-level when cursor is inside a proc.
     let type_name = crate::analysis::resolve::resolve_var_type_at(symbols, offset, &var_name)?;
 
-    let members: Vec<CompletionItem> = symbols
-        .symbols
-        .iter()
-        .filter(|s| {
-            matches!(s.kind, SymbolKind::UdtMember)
-                && match &s.detail {
-                    SymbolDetail::UdtMember { parent_type, .. } => {
-                        parent_type.eq_ignore_ascii_case(&type_name)
-                    }
-                    _ => false,
-                }
-        })
-        .map(|s| CompletionItem {
-            label: s.name.to_string(),
-            kind: Some(CompletionItemKind::FIELD),
-            detail: s.type_name.as_ref().map(|t| t.to_string()),
-            ..Default::default()
-        })
-        .collect();
-
-    if !members.is_empty() {
-        return Some(members);
-    }
-
-    // Check if type_name is an Enum → offer its members (e.g. Dim c As Color → c.Red)
-    let enum_items: Vec<CompletionItem> = symbols
-        .symbols
-        .iter()
-        .filter(|s| {
-            matches!(s.kind, SymbolKind::EnumMember)
-                && match &s.detail {
-                    SymbolDetail::EnumMember { parent_enum, .. } => {
-                        parent_enum.eq_ignore_ascii_case(&type_name)
-                    }
-                    _ => false,
-                }
-        })
-        .map(|s| CompletionItem {
-            label: s.name.to_string(),
-            kind: Some(CompletionItemKind::ENUM_MEMBER),
-            detail: s.type_name.as_ref().map(|t| t.to_string()),
-            ..Default::default()
-        })
-        .collect();
-
-    if !enum_items.is_empty() {
-        return Some(enum_items);
-    }
-
-    // Fallback: look up the type in Excel builtin types (e.g. Range, PivotTable, Chart, Shape).
-    let builtin_types = builtin_types();
-    if let Some(excel_type) = builtin_types
-        .iter()
-        .find(|t| t.name.eq_ignore_ascii_case(&type_name))
-    {
-        let mut items: Vec<CompletionItem> = excel_type
-            .properties
-            .iter()
-            .map(|p| CompletionItem {
-                label: p.name.to_string(),
-                kind: Some(CompletionItemKind::PROPERTY),
-                detail: Some(p.return_type.to_string()),
-                ..Default::default()
-            })
-            .collect();
-        items.extend(excel_type.methods.iter().map(|m| CompletionItem {
-            label: m.name.to_string(),
-            kind: Some(CompletionItemKind::METHOD),
-            detail: m.return_type.as_ref().map(|t| t.to_string()),
-            ..Default::default()
-        }));
+    // Resolve members of `type_name`: UDT → Enum → Excel builtin, in that order.
+    if let Some(items) = resolve_type_members(symbols, &type_name) {
         return Some(items);
     }
 
@@ -299,7 +238,7 @@ fn complete_dot_access(
         return Some(items);
     }
 
-    Some(members)
+    Some(Vec::new())
 }
 
 fn push_named_items(
