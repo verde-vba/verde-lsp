@@ -8,6 +8,9 @@ use crate::parser::lexer::Token;
 use crate::parser::ParseResult;
 use crate::vba_builtins::{BUILTIN_FUNCTIONS, BUILTIN_TYPES, KEYWORDS};
 
+/// VBA runtime global objects that are always available without declaration.
+const VBA_GLOBAL_OBJECTS: &[&str] = &["Debug", "Err"];
+
 pub fn compute(
     parse_result: &ParseResult,
     symbols: &SymbolTable,
@@ -101,6 +104,10 @@ fn collect_module_declared(symbols: &SymbolTable) -> std::collections::HashSet<S
     for t in BUILTIN_TYPES {
         declared.insert(SmolStr::new(t.to_ascii_lowercase()));
     }
+    // VBA runtime global objects (e.g. `Debug.Print`, `Err.Raise`).
+    for name in VBA_GLOBAL_OBJECTS {
+        declared.insert(SmolStr::new(name.to_ascii_lowercase()));
+    }
     // Excel `Application` members are VBA globals in the Excel host
     // (e.g. `ActiveWorkbook`, `Range`, `Cells`, `Worksheets`), so they
     // count as declared under Option Explicit.
@@ -127,6 +134,23 @@ fn scan_procedure(
         }
     }
 
+    // Pre-scan: collect GoTo/OnError label targets so that label definition
+    // lines (parsed as bare-identifier ExpressionStatements) are not flagged.
+    for stmt_id in &proc.body {
+        if let AstNode::Statement(stmt) = &ast.nodes[*stmt_id] {
+            let tokens = match stmt {
+                StatementNode::GoTo(n) => &n.tokens,
+                StatementNode::OnError(n) => &n.tokens,
+                _ => continue,
+            };
+            for spanned in tokens {
+                if spanned.token == Token::Identifier {
+                    local_declared.insert(SmolStr::new(spanned.text.to_ascii_lowercase()));
+                }
+            }
+        }
+    }
+
     for stmt_id in &proc.body {
         let stmt = match &ast.nodes[*stmt_id] {
             AstNode::Statement(s) => s,
@@ -138,6 +162,8 @@ fn scan_procedure(
                     local_declared.insert(SmolStr::new(name.to_ascii_lowercase()));
                 }
             }
+            // GoTo/OnError targets are label names, not variable references.
+            StatementNode::GoTo(_) | StatementNode::OnError(_) => {}
             _ => {
                 let tokens = stmt.tokens();
                 if !tokens.is_empty() {

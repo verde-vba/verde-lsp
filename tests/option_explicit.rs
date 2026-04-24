@@ -347,3 +347,67 @@ fn windows_drive_letter_uri_qualified_module_name_smoke() {
         "expected no undeclared warning for ModuleA with Windows-style URIs, got: {diags:?}"
     );
 }
+
+#[test]
+fn does_not_warn_on_goto_label_target() {
+    assert_no_diagnostics(
+        r#"Option Explicit
+Sub Demo()
+    GoTo Cleanup
+    Dim x As Long
+    x = 1
+Cleanup:
+    x = 0
+End Sub"#,
+        "GoTo label target should not be flagged as undeclared",
+    );
+}
+
+#[test]
+fn does_not_warn_on_on_error_goto_label() {
+    assert_no_diagnostics(
+        r#"Option Explicit
+Sub Demo()
+    On Error GoTo ErrHandler
+    Dim x As Long
+    x = 1
+    Exit Sub
+ErrHandler:
+    x = 0
+End Sub"#,
+        "On Error GoTo label should not be flagged as undeclared",
+    );
+}
+
+#[test]
+fn does_not_warn_on_debug_print() {
+    assert_no_diagnostics(
+        "Option Explicit\n\nSub Demo()\n    Debug.Print \"hello\"\nEnd Sub\n",
+        "Debug is a VBA global object",
+    );
+}
+
+#[test]
+fn does_not_warn_on_err_object() {
+    assert_no_diagnostics(
+        "Option Explicit\n\nSub Demo()\n    Err.Raise 1000\nEnd Sub\n",
+        "Err is a VBA global object",
+    );
+}
+
+#[test]
+fn does_not_warn_on_parameter_with_error_handling() {
+    // Combined scenario: procedure parameter + GoTo label + Debug + Err
+    assert_no_diagnostics(
+        r#"Option Explicit
+Sub Process(ByVal filePath As String, Optional ByRef count As Long)
+    On Error GoTo ErrHandler
+    Debug.Print filePath
+    count = count + 1
+    Exit Sub
+ErrHandler:
+    Err.Raise Err.Number
+End Sub"#,
+        "parameters with error handling, Debug, and Err",
+    );
+}
